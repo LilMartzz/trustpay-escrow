@@ -82,6 +82,7 @@ def transferir(
     }
 
 @router.get("/historial")
+@router.get("/historial")
 def historial(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)):
     billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
     transacciones = db.query(Transaccion).filter(
@@ -95,6 +96,7 @@ def historial(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)
             "monto": float(t.monto),
             "tipo": t.tipo,
             "estado": t.estado,
+            "es_salida": str(billetera.id) == str(t.billetera_origen),
             "fecha": str(t.creado_en)
         }
         for t in transacciones

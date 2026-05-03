@@ -33,6 +33,12 @@ export default function MisOperaciones() {
     expirado: 'rgba(107,114,128,0.08)'
   }
 
+  const navItems = [
+    { label: 'Dashboard', path: '/dashboard' },
+    { label: 'Mis operaciones', path: '/operaciones' },
+    { label: 'Perfil', path: '/perfil' },
+  ]
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <div style={{ width: '190px', background: 'var(--surface)', borderRight: '0.5px solid var(--border)', padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
@@ -40,9 +46,14 @@ export default function MisOperaciones() {
           Trust<span style={{ color: 'var(--green)' }}>Pay</span>
           <div style={{ fontSize: '9px', fontWeight: 400, color: 'var(--muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginTop: '2px', fontFamily: 'Inter' }}>escrow digital</div>
         </div>
-        <div onClick={() => navigate('/dashboard')} style={{ padding: '8px 10px', borderRadius: '8px', fontSize: '12.5px', color: 'var(--muted)', cursor: 'pointer' }}>Dashboard</div>
-        <div style={{ padding: '8px 10px', borderRadius: '8px', fontSize: '12.5px', color: 'var(--text)', background: 'var(--surface2)', fontWeight: 500, cursor: 'pointer' }}>Mis operaciones</div>
-        <div onClick={() => { localStorage.removeItem('token'); navigate('/login') }} style={{ padding: '8px 10px', borderRadius: '8px', fontSize: '12.5px', color: 'var(--red)', cursor: 'pointer', marginTop: 'auto' }}>
+        {navItems.map(item => (
+          <div key={item.label} onClick={() => navigate(item.path)}
+            style={{ padding: '8px 10px', borderRadius: '8px', fontSize: '12.5px', cursor: 'pointer', color: window.location.pathname === item.path ? 'var(--text)' : 'var(--muted)', background: window.location.pathname === item.path ? 'var(--surface2)' : 'transparent', fontWeight: window.location.pathname === item.path ? 500 : 400 }}>
+            {item.label}
+          </div>
+        ))}
+        <div onClick={() => { localStorage.removeItem('token'); navigate('/login') }}
+          style={{ padding: '8px 10px', borderRadius: '8px', fontSize: '12.5px', color: 'var(--red)', cursor: 'pointer', marginTop: 'auto' }}>
           Cerrar sesión
         </div>
       </div>
@@ -66,13 +77,10 @@ export default function MisOperaciones() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {operaciones.map(op => (
               <div key={op.escrow_id} onClick={() => navigate(`/operacion/${op.escrow_id}`)}
-                style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: '12px', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.2s', display: 'flex', alignItems: 'center', gap: '16px' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border)'}
-              >
+                style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: '12px', padding: '16px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: op.rol === 'comprador' ? 'var(--green-bg)' : 'var(--amber-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
                   {op.rol === 'comprador' ? '🛒' : '📦'}
                 </div>
-
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <span style={{ fontSize: '13px', fontWeight: 500 }}>
@@ -86,7 +94,6 @@ export default function MisOperaciones() {
                     {new Date(op.fecha).toLocaleString('es-PE')}
                   </div>
                 </div>
-
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontFamily: 'Syne', fontSize: '16px', fontWeight: 600, color: estadoColor[op.estado], marginBottom: '4px' }}>
                     S/ {op.monto}
@@ -95,7 +102,6 @@ export default function MisOperaciones() {
                     {op.estado}
                   </div>
                 </div>
-
                 <div style={{ color: 'var(--muted)', fontSize: '16px', marginLeft: '4px' }}>→</div>
               </div>
             ))}

@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap');
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root {
+  min-height: 100vh;
+  background: #0E0F11;
+  color: #F1F3F6;
+  font-family: 'Inter', sans-serif;
+}
+
+:root {
+  --bg: #0E0F11;
+  --surface: #16181C;
+  --surface2: #1E2026;
+  --border: #2A2D35;
+  --green: #2ECC8A;
+  --green-bg: rgba(46,204,138,0.08);
+  --amber: #F59E0B;
+  --amber-bg: rgba(245,158,11,0.08);
+  --red: #F87171;
+  --muted: #6B7280;
+  --text: #F1F3F6;
+  --text2: #9CA3AF;
+}
+
+input, textarea, select {
+  background: var(--surface2) !important;
+  border: 0.5px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  color: var(--text) !important;
+  font-family: 'Inter', sans-serif !important;
+  width: 100%;
+  outline: none !important;
+  transition: border-color 0.2s;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--green) !important;
+}
+
+button {
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+button:active { transform: scale(0.98); }
+
+.btn-primary { background: var(--green); color: #0a1a12; width: 100%; }
+.btn-secondary { background: var(--surface2); color: var(--text2); border: 0.5px solid var(--border); width: 100%; }
+.btn-danger { background: transparent; color: var(--red); border: 0.5px solid rgba(248,113,113,0.3); width: 100%; }
+
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.error {
+  color: var(--red);
+  font-size: 12px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+a { color: var(--green); text-decoration: none; }
+a:hover { opacity: 0.8; }

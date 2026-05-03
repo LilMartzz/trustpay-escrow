@@ -47,6 +47,7 @@ export default function Dashboard() {
       const res = await api.post(
         `/escrow/iniciar?email_destino=${form.email_destino}&monto=${form.monto}`
       )
+      await cargarDatos()
       navigate(`/operacion/${res.data.escrow_id}`)
     } catch (e) {
       setError(e.response?.data?.detail || 'Error al iniciar escrow')

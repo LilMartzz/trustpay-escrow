@@ -251,7 +251,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
                 <h2 style={{ fontFamily: 'Syne', fontSize: '17px', fontWeight: 700, letterSpacing: '-0.02em' }}>
-                  Contrapartes
+                  Vendedores / Compradores
                 </h2>
                 <p style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '2px' }}>
                   Personas con las que has operado

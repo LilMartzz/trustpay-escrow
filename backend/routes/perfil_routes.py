@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Usuario
@@ -11,6 +12,39 @@ from dependencies import get_usuario_actual
 router = APIRouter(prefix="/perfil", tags=["perfil"])
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@router.get("/buscar")
+def buscar_usuarios(
+    q: str = "",
+    usuario=Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    """Busca usuarios por nombre o email (excluye al usuario actual). Máx 6 resultados."""
+    if len(q.strip()) < 1:
+        return []
+    term = q.strip().lower()
+    resultados = (
+        db.query(Usuario)
+        .filter(
+            or_(
+                func.lower(Usuario.nombre).like(f"{term}%"),
+                func.lower(Usuario.email).like(f"{term}%"),
+            ),
+            Usuario.id != usuario.id,
+        )
+        .limit(6)
+        .all()
+    )
+    return [
+        {
+            "nombre": u.nombre,
+            "email": u.email,
+            "verificado": u.verificado,
+            "iniciales": u.nombre[:2].upper(),
+        }
+        for u in resultados
+    ]
 
 
 @router.get("/")

@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Wallet, TrendingUp, Clock, ArrowUpRight, ArrowDownRight,
-  RefreshCw, Plus, ShieldCheck, Info,
+  RefreshCw, Plus, ShieldCheck,
 } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
+import EscrowNatural from '../components/EscrowNatural'
 
 /* ── helpers ── */
 function labelHistorial(t) {
@@ -273,61 +274,24 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right column — Escrow */}
-          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <div style={{
-                width: '30px', height: '30px', borderRadius: '8px',
-                background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <ShieldCheck size={15} color="var(--green)" />
-              </div>
-              <span className="label" style={{ margin: 0 }}>Compra segura con escrow</span>
-            </div>
-            <p style={{ fontSize: '12.5px', color: 'var(--text3)', marginBottom: '20px', lineHeight: 1.6 }}>
-              El vendedor solo recibe el dinero cuando confirmas que recibiste el producto.
-            </p>
-
-            <form onSubmit={handleEscrow} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <div className="form-group">
-                <label className="label">Email del vendedor</label>
-                <input
-                  type="email"
-                  placeholder="vendedor@email.com"
-                  value={form.email_destino}
-                  onChange={e => setForm({ ...form, email_destino: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="label">Monto (S/)</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={form.monto}
-                  onChange={e => setForm({ ...form, monto: e.target.value })}
-                  required min="1" step="0.01"
-                />
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="label">Descripción del producto</label>
-                <textarea
-                  placeholder="Ej: iPhone 14 Pro 256GB color negro..."
-                  value={form.descripcion}
-                  onChange={e => setForm({ ...form, descripcion: e.target.value })}
-                  style={{ height: '80px', resize: 'none' }}
-                />
-              </div>
-
-              <div className="alert alert-warning" style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                <Info size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
-                <span>El dinero queda retenido hasta que confirmes recibir el producto. Auto-liberación en 24h.</span>
-              </div>
-
-              <button type="submit" className="btn-primary" disabled={loadingEsc} style={{ marginTop: '4px' }}>
-                {loadingEsc ? 'Procesando...' : 'Pagar con escrow'}
-              </button>
-            </form>
+          {/* Right column — Escrow Natural */}
+          <div className="card">
+            <EscrowNatural
+              saldoDisponible={saldo?.saldo_disponible}
+              onSubmit={async ({ monto, email_destino, descripcion }) => {
+                setError('')
+                setLoadingEsc(true)
+                try {
+                  const params = new URLSearchParams({ email_destino, monto, descripcion })
+                  const res = await api.post(`/escrow/iniciar?${params}`)
+                  await cargarDatos()
+                  navigate(`/operacion/${res.data.escrow_id}`)
+                } catch (err) {
+                  setError(err.response?.data?.detail || 'Error al iniciar escrow')
+                }
+                setLoadingEsc(false)
+              }}
+            />
           </div>
 
         </div>

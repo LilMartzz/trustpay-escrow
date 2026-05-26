@@ -1,8 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime
+from datetime import datetime
+from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from database import Base
+
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -12,9 +14,12 @@ class Usuario(Base):
     password_hash = Column(String, nullable=False)
     telefono = Column(String)
     creado_en = Column(DateTime, server_default=func.now())
-    verificado = Column(String, default="no_verificado")  # no_verificado, pendiente, verificado
+    # no_verificado | pendiente | verificado
+    verificado = Column(String, default="no_verificado")
     dni_url = Column(String, nullable=True)
     selfie_url = Column(String, nullable=True)
+    dni_numero = Column(String(8), nullable=True)
+
 
 class Billetera(Base):
     __tablename__ = "billetera"
@@ -25,6 +30,7 @@ class Billetera(Base):
     estado = Column(String, default="activa")
     actualizado_en = Column(DateTime, server_default=func.now())
 
+
 class Transaccion(Base):
     __tablename__ = "transacciones"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -33,7 +39,9 @@ class Transaccion(Base):
     monto = Column(Numeric(12, 2), nullable=False)
     tipo = Column(String, default="p2p")
     estado = Column(String, default="pendiente")
+    descripcion = Column(String, nullable=True)
     creado_en = Column(DateTime, server_default=func.now())
+
 
 class Escrow(Base):
     __tablename__ = "escrow"
@@ -44,12 +52,35 @@ class Escrow(Base):
     expira_en = Column(DateTime)
     liberado_en = Column(DateTime)
 
+
 class Evidencia(Base):
     __tablename__ = "evidencias"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"))
     usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
-    tipo = Column(String)  # "archivo" o "link"
+    tipo = Column(String)  # "archivo" | "link"
     url = Column(String, nullable=False)
     descripcion = Column(String)
     subido_en = Column(DateTime, server_default=func.now())
+
+
+class Envio(Base):
+    __tablename__ = "envios"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"), unique=True)
+    empresa = Column(String, nullable=False)
+    numero_guia = Column(String, nullable=False)
+    descripcion_producto = Column(String, nullable=True)
+    # preparando | en_camino | entregado | confirmado
+    estado = Column(String, default="preparando")
+    creado_en = Column(DateTime, default=datetime.utcnow)
+    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Mensaje(Base):
+    __tablename__ = "mensajes"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"))
+    remitente_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    contenido = Column(String, nullable=False)
+    creado_en = Column(DateTime, default=datetime.utcnow)

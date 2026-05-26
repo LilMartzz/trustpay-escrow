@@ -8,30 +8,32 @@ from routes.billetera_routes import router as billetera_router
 from routes.escrow_routes import router as escrow_router
 from routes.evidencia_routes import router as evidencia_router
 from routes.perfil_routes import router as perfil_router
+from routes.envio_routes import router as envio_router
+from routes.chat_routes import router as chat_router
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(title="TrustPay API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://trustpay-escrow-two.vercel.app",
-        "https://trustpay-escrow-q23g1td8a-lilmartzzs-projects.vercel.app"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 app.include_router(auth_router)
 app.include_router(billetera_router)
 app.include_router(escrow_router)
 app.include_router(evidencia_router)
 app.include_router(perfil_router)
+app.include_router(envio_router)
+app.include_router(chat_router)
+
 
 @app.get("/")
 def root():
-    return {"mensaje": "API del proyecto Escrow funcionando"}
+    return {"app": "TrustPay", "version": "1.0.0", "status": "ok"}

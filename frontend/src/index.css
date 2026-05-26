@@ -37,7 +37,7 @@ input, textarea, select {
   transition: border-color 0.2s;
 }
 
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   border-color: var(--green) !important;
 }
 
@@ -53,10 +53,14 @@ button {
 }
 
 button:active { transform: scale(0.98); }
+button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .btn-primary { background: var(--green); color: #0a1a12; width: 100%; }
-.btn-secondary { background: var(--surface2); color: var(--text2); border: 0.5px solid var(--border); width: 100%; }
-.btn-danger { background: transparent; color: var(--red); border: 0.5px solid rgba(248,113,113,0.3); width: 100%; }
+.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.btn-secondary { background: var(--surface2); color: var(--text2); border: 0.5px solid var(--border) !important; width: 100%; }
+.btn-secondary:hover:not(:disabled) { border-color: var(--green) !important; color: var(--text); }
+.btn-danger { background: transparent; color: var(--red); border: 0.5px solid rgba(248,113,113,0.3) !important; width: 100%; }
+.btn-danger:hover:not(:disabled) { background: rgba(248,113,113,0.06); }
 
 .card {
   background: var(--surface);
@@ -90,3 +94,9 @@ button:active { transform: scale(0.98); }
 
 a { color: var(--green); text-decoration: none; }
 a:hover { opacity: 0.8; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }

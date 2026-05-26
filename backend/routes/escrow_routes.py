@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
+from database import get_db, SessionLocal
 from models import Billetera, Transaccion, Escrow, Usuario
 from dependencies import get_usuario_actual
+from tasks import procesar_escrows_vencidos
 from decimal import Decimal
 from datetime import datetime, timedelta
 
@@ -213,3 +214,14 @@ def mis_operaciones(
         })
 
     return resultado
+
+
+@router.post("/procesar-vencidos")
+def procesar_vencidos_manual(db: Session = Depends(get_db)):
+    """Fuerza la liberación inmediata de todos los escrows vencidos. Sin auth — solo usar desde panel admin."""
+    procesar_escrows_vencidos(SessionLocal)
+    vencidos = db.query(Escrow).filter(
+        Escrow.estado == "retenido",
+        Escrow.expira_en < datetime.utcnow(),
+    ).count()
+    return {"mensaje": "Proceso completado", "pendientes_aun": vencidos}

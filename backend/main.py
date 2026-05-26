@@ -1,7 +1,8 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base
+from database import engine, Base, SessionLocal
 import models
 from routes.auth_routes import router as auth_router
 from routes.billetera_routes import router as billetera_router
@@ -10,10 +11,18 @@ from routes.evidencia_routes import router as evidencia_router
 from routes.perfil_routes import router as perfil_router
 from routes.envio_routes import router as envio_router
 from routes.chat_routes import router as chat_router
+from tasks import iniciar_scheduler
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="TrustPay API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    iniciar_scheduler(SessionLocal)
+    yield
+
+
+app = FastAPI(title="TrustPay API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

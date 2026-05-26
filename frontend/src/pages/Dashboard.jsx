@@ -1,49 +1,53 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import {
+  Wallet, TrendingUp, Clock, ArrowUpRight, ArrowDownRight,
+  RefreshCw, Plus, ShieldCheck, Info,
+} from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 
+/* ── helpers ── */
 function labelHistorial(t) {
   if (t.tipo === 'escrow') {
     if (t.estado === 'pendiente') return 'Escrow retenido'
-    if (t.es_salida) return 'Pago escrow'
-    return 'Cobro escrow'
+    return t.es_salida ? 'Pago escrow' : 'Cobro escrow'
   }
   return t.es_salida ? 'Transferencia enviada' : 'Transferencia recibida'
 }
-
 function colorHistorial(t) {
   if (t.tipo === 'escrow' && t.estado === 'pendiente') return 'var(--amber)'
   return t.es_salida ? 'var(--red)' : 'var(--green)'
 }
-
-function iconoHistorial(t) {
-  if (t.tipo === 'escrow' && t.estado === 'pendiente') return '⟳'
-  return t.es_salida ? '↑' : '↓'
-}
-
 function prefijoHistorial(t) {
   if (t.tipo === 'escrow' && t.estado === 'pendiente') return ''
-  return t.es_salida ? '-' : '+'
+  return t.es_salida ? '−' : '+'
+}
+function IconHistorial({ t }) {
+  const isPending = t.tipo === 'escrow' && t.estado === 'pendiente'
+  if (isPending) return <RefreshCw size={13} />
+  if (t.es_salida) return <ArrowUpRight size={13} />
+  return <ArrowDownRight size={13} />
 }
 
 export default function Dashboard() {
-  const [saldo, setSaldo] = useState(null)
+  const [saldo, setSaldo]       = useState(null)
   const [historial, setHistorial] = useState([])
-  const [usuario, setUsuario] = useState('')
-  const [form, setForm] = useState({ email_destino: '', monto: '', descripcion: '' })
+  const [usuario, setUsuario]   = useState('')
+  const [form, setForm]         = useState({ email_destino: '', monto: '', descripcion: '' })
   const [deposito, setDeposito] = useState('')
-  const [msg, setMsg] = useState('')
-  const [error, setError] = useState('')
-  const navigate = useNavigate()
-  const location = useLocation()
+  const [msg, setMsg]           = useState('')
+  const [error, setError]       = useState('')
+  const [loadingDep, setLoadingDep] = useState(false)
+  const [loadingEsc, setLoadingEsc] = useState(false)
+  const navigate  = useNavigate()
+  const location  = useLocation()
 
   useEffect(() => {
     cargarDatos()
-    const intervalo = setInterval(cargarDatos, 5000)
-    return () => clearInterval(intervalo)
+    const id = setInterval(cargarDatos, 5000)
+    return () => clearInterval(id)
   }, [])
-
   useEffect(() => { cargarDatos() }, [location.key])
 
   const cargarDatos = async () => {
@@ -64,20 +68,23 @@ export default function Dashboard() {
   const handleDeposito = async (e) => {
     e.preventDefault()
     setError('')
+    setLoadingDep(true)
     try {
       await api.post(`/billetera/depositar?monto=${deposito}`)
       setDeposito('')
-      setMsg('Depósito exitoso')
+      setMsg('¡Depósito exitoso!')
       await cargarDatos()
-      setTimeout(() => setMsg(''), 3000)
+      setTimeout(() => setMsg(''), 3500)
     } catch {
       setError('Error al depositar')
     }
+    setLoadingDep(false)
   }
 
   const handleEscrow = async (e) => {
     e.preventDefault()
     setError('')
+    setLoadingEsc(true)
     try {
       const params = new URLSearchParams({
         email_destino: form.email_destino,
@@ -87,64 +94,109 @@ export default function Dashboard() {
       const res = await api.post(`/escrow/iniciar?${params}`)
       await cargarDatos()
       navigate(`/operacion/${res.data.escrow_id}`)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Error al iniciar escrow')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error al iniciar escrow')
     }
+    setLoadingEsc(false)
   }
 
+  const stats = [
+    {
+      label: 'Saldo total',
+      value: `S/ ${Number(saldo?.saldo ?? 0).toFixed(2)}`,
+      icon: Wallet,
+      color: 'var(--text)',
+      bg: 'var(--surface2)',
+    },
+    {
+      label: 'Disponible',
+      value: `S/ ${Number(saldo?.saldo_disponible ?? 0).toFixed(2)}`,
+      icon: TrendingUp,
+      color: 'var(--green)',
+      bg: 'var(--green-bg)',
+    },
+    {
+      label: 'Retenido en escrow',
+      value: `S/ ${Number(saldo?.saldo_retenido ?? 0).toFixed(2)}`,
+      icon: Clock,
+      color: 'var(--amber)',
+      bg: 'var(--amber-bg)',
+    },
+  ]
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-layout">
       <Sidebar />
 
-      <div style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
+      <main className="main-content" style={{ padding: '28px 32px' }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '26px' }}>
           <div>
-            <h1 style={{ fontFamily: 'Syne', fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-              Bienvenido, {usuario}
+            <h1 style={{ fontFamily: 'Syne', fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '3px' }}>
+              Bienvenido, {usuario} 👋
             </h1>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>Panel principal</p>
+            <p style={{ fontSize: '13px', color: 'var(--text3)' }}>Panel principal · TrustPay</p>
           </div>
           <div style={{
-            width: '34px', height: '34px', borderRadius: '50%',
-            background: 'var(--surface2)', border: '0.5px solid var(--border)',
+            width: '38px', height: '38px', borderRadius: '50%',
+            background: 'var(--green-bg)',
+            border: '1px solid rgba(34,197,94,0.25)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '12px', fontWeight: 500, color: '#A8CDEE',
+            fontFamily: 'Syne', fontSize: '13px', fontWeight: 700,
+            color: 'var(--green)',
           }}>
             {usuario.slice(0, 2).toUpperCase()}
           </div>
         </div>
 
-        {msg && (
-          <div style={{ background: 'var(--green-bg)', border: '0.5px solid rgba(46,204,138,0.2)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--green)', marginBottom: '16px' }}>
-            {msg}
-          </div>
-        )}
-        {error && (
-          <div style={{ background: 'rgba(248,113,113,0.08)', border: '0.5px solid rgba(248,113,113,0.2)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--red)', marginBottom: '16px' }}>
-            {error}
-          </div>
-        )}
+        {/* ── Alerts ── */}
+        {msg   && <div className="alert alert-success" style={{ marginBottom: '20px' }}>{msg}</div>}
+        {error && <div className="alert alert-error"   style={{ marginBottom: '20px' }}>{error}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
-          {[
-            { label: 'Saldo total', value: `S/ ${Number(saldo?.saldo ?? 0).toFixed(2)}`, color: 'var(--text)' },
-            { label: 'Disponible', value: `S/ ${Number(saldo?.saldo_disponible ?? 0).toFixed(2)}`, color: 'var(--green)' },
-            { label: 'Retenido en escrow', value: `S/ ${Number(saldo?.saldo_retenido ?? 0).toFixed(2)}`, color: 'var(--amber)' },
-          ].map(s => (
-            <div key={s.label} className="card" style={{ padding: '14px 16px' }}>
-              <div className="label">{s.label}</div>
-              <div style={{ fontFamily: 'Syne', fontSize: '24px', fontWeight: 600, color: s.color, letterSpacing: '-0.02em' }}>
-                {s.value}
+        {/* ── Stats ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '24px' }} className="grid-1-mobile">
+          {stats.map(s => {
+            const Icon = s.icon
+            return (
+              <div key={s.label} className="card stat-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                  <span className="label">{s.label}</span>
+                  <div style={{
+                    width: '30px', height: '30px', borderRadius: '8px',
+                    background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Icon size={15} color={s.color} />
+                  </div>
+                </div>
+                <div style={{
+                  fontFamily: 'Syne', fontSize: '26px', fontWeight: 700,
+                  color: s.color, letterSpacing: '-0.03em', lineHeight: 1,
+                }}>
+                  {s.value}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* ── Main grid ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }} className="grid-1-mobile">
 
+          {/* Left column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+            {/* Depositar */}
             <div className="card">
-              <div className="label" style={{ marginBottom: '14px' }}>Depositar saldo</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <div style={{
+                  width: '30px', height: '30px', borderRadius: '8px',
+                  background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Plus size={15} color="var(--green)" />
+                </div>
+                <span className="label" style={{ margin: 0 }}>Depositar saldo</span>
+              </div>
               <form onSubmit={handleDeposito}>
                 <div className="form-group">
                   <label className="label">Monto (S/)</label>
@@ -153,83 +205,90 @@ export default function Dashboard() {
                     placeholder="0.00"
                     value={deposito}
                     onChange={e => setDeposito(e.target.value)}
-                    required
-                    min="1"
-                    step="0.01"
+                    required min="1" step="0.01"
                   />
                 </div>
-                <button type="submit" className="btn-primary">Depositar</button>
+                <button type="submit" className="btn-primary" disabled={loadingDep}>
+                  {loadingDep ? 'Depositando...' : 'Depositar'}
+                </button>
               </form>
             </div>
 
-            <div className="card">
-              <div className="label" style={{ marginBottom: '14px' }}>Historial reciente</div>
-              {historial.length === 0 ? (
-                <p style={{ fontSize: '12px', color: 'var(--muted)', textAlign: 'center', padding: '16px 0' }}>
-                  Sin movimientos aún
-                </p>
-              ) : (
-                historial.slice(0, 8).map(t => {
-                  const color = colorHistorial(t)
-                  const icono = iconoHistorial(t)
-                  const prefijo = prefijoHistorial(t)
-                  const isEscrowActivo = t.tipo === 'escrow' && t.estado === 'pendiente'
+            {/* Historial */}
+            <div className="card" style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <span className="label" style={{ margin: 0 }}>Historial reciente</span>
+                <button
+                  onClick={() => navigate('/operaciones')}
+                  className="btn-ghost"
+                  style={{ fontSize: '11px', padding: '4px 8px', color: 'var(--green)' }}
+                >
+                  Ver todo
+                </button>
+              </div>
 
-                  return (
-                    <div
-                      key={t.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '9px 0',
-                        borderBottom: '0.5px solid var(--border)',
-                      }}
-                    >
-                      <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '7px',
-                        background: isEscrowActivo
-                          ? 'var(--amber-bg)'
-                          : t.es_salida
-                            ? 'rgba(248,113,113,0.08)'
-                            : 'var(--green-bg)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        flexShrink: 0,
-                        color,
+              {historial.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <Wallet size={28} color="var(--border2)" style={{ marginBottom: '10px' }} />
+                  <p style={{ fontSize: '12.5px', color: 'var(--text3)' }}>Sin movimientos aún</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {historial.slice(0, 8).map((t, idx) => {
+                    const color   = colorHistorial(t)
+                    const prefijo = prefijoHistorial(t)
+                    const isPending = t.tipo === 'escrow' && t.estado === 'pendiente'
+                    const bgIcon = isPending ? 'var(--amber-bg)' : t.es_salida ? 'rgba(248,113,113,0.1)' : 'var(--green-bg)'
+                    return (
+                      <div key={t.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        padding: '10px 0',
+                        borderBottom: idx < historial.slice(0,8).length - 1 ? '1px solid var(--border)' : 'none',
                       }}>
-                        {icono}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {labelHistorial(t)}
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '9px',
+                          background: bgIcon, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', color, flexShrink: 0,
+                        }}>
+                          <IconHistorial t={t} />
                         </div>
-                        {t.contraparte && (
-                          <div style={{ fontSize: '10px', color: 'var(--muted)' }}>
-                            {t.es_salida ? 'Para' : 'De'}: {t.contraparte}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 500, marginBottom: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {labelHistorial(t)}
                           </div>
-                        )}
+                          {t.contraparte && (
+                            <div style={{ fontSize: '11px', color: 'var(--text3)' }}>
+                              {t.es_salida ? 'Para' : 'De'}: {t.contraparte}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color, flexShrink: 0 }}>
+                          {prefijo}S/ {Number(t.monto).toFixed(2)}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '12px', fontWeight: 600, color, flexShrink: 0 }}>
-                        {prefijo}S/ {Number(t.monto).toFixed(2)}
-                      </div>
-                    </div>
-                  )
-                })
+                    )
+                  })}
+                </div>
               )}
             </div>
           </div>
 
-          <div className="card">
-            <div className="label" style={{ marginBottom: '4px' }}>Compra segura con escrow</div>
-            <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '16px', lineHeight: 1.5 }}>
+          {/* Right column — Escrow */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <div style={{
+                width: '30px', height: '30px', borderRadius: '8px',
+                background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <ShieldCheck size={15} color="var(--green)" />
+              </div>
+              <span className="label" style={{ margin: 0 }}>Compra segura con escrow</span>
+            </div>
+            <p style={{ fontSize: '12.5px', color: 'var(--text3)', marginBottom: '20px', lineHeight: 1.6 }}>
               El vendedor solo recibe el dinero cuando confirmas que recibiste el producto.
             </p>
-            <form onSubmit={handleEscrow}>
+
+            <form onSubmit={handleEscrow} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="form-group">
                 <label className="label">Email del vendedor</label>
                 <input
@@ -247,36 +306,32 @@ export default function Dashboard() {
                   placeholder="0.00"
                   value={form.monto}
                   onChange={e => setForm({ ...form, monto: e.target.value })}
-                  required
-                  min="1"
-                  step="0.01"
+                  required min="1" step="0.01"
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group" style={{ flex: 1 }}>
                 <label className="label">Descripción del producto</label>
                 <textarea
                   placeholder="Ej: iPhone 14 Pro 256GB color negro..."
                   value={form.descripcion}
                   onChange={e => setForm({ ...form, descripcion: e.target.value })}
-                  style={{ height: '72px', resize: 'none' }}
+                  style={{ height: '80px', resize: 'none' }}
                 />
               </div>
-              <div style={{
-                background: 'var(--amber-bg)',
-                border: '0.5px solid rgba(245,158,11,0.2)',
-                borderRadius: '8px',
-                padding: '10px 12px',
-                marginBottom: '14px',
-              }}>
-                <p style={{ fontSize: '11px', color: 'var(--amber)', lineHeight: 1.5 }}>
-                  El dinero queda retenido hasta que confirmes recibir el producto. Auto-liberación en 24h.
-                </p>
+
+              <div className="alert alert-warning" style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <Info size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
+                <span>El dinero queda retenido hasta que confirmes recibir el producto. Auto-liberación en 24h.</span>
               </div>
-              <button type="submit" className="btn-primary">Pagar con escrow</button>
+
+              <button type="submit" className="btn-primary" disabled={loadingEsc} style={{ marginTop: '4px' }}>
+                {loadingEsc ? 'Procesando...' : 'Pagar con escrow'}
+              </button>
             </form>
           </div>
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }

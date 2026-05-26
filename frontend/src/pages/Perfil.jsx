@@ -1,29 +1,33 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  User, Mail, Phone, Shield, CheckCircle2,
+  Clock, Upload, Camera, BadgeCheck, AlertCircle,
+} from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 
 const ESTADO_VERIF = {
-  no_verificado: { label: 'No verificado', color: 'var(--red)', bg: 'rgba(248,113,113,0.08)' },
-  pendiente: { label: 'En revisión', color: 'var(--amber)', bg: 'var(--amber-bg)' },
-  verificado: { label: 'Verificado', color: 'var(--green)', bg: 'var(--green-bg)' },
+  no_verificado: { label: 'No verificado', color: 'var(--red)',   bg: 'rgba(248,113,113,0.1)', icon: AlertCircle },
+  pendiente:     { label: 'En revisión',   color: 'var(--amber)', bg: 'var(--amber-bg)',       icon: Clock },
+  verificado:    { label: 'Verificado',    color: 'var(--green)', bg: 'var(--green-bg)',       icon: BadgeCheck },
 }
 
 export default function Perfil() {
-  const [perfil, setPerfil] = useState(null)
-  const [nombre, setNombre] = useState('')
-  const [telefono, setTelefono] = useState('')
-  const [dniNumero, setDniNumero] = useState('')
-  const [dniFile, setDniFile] = useState(null)
-  const [selfieFile, setSelfieFile] = useState(null)
-  const [dniValido, setDniValido] = useState(null)
-  const [msg, setMsg] = useState('')
+  const [perfil,      setPerfil]      = useState(null)
+  const [nombre,      setNombre]      = useState('')
+  const [telefono,    setTelefono]    = useState('')
+  const [dniNumero,   setDniNumero]   = useState('')
+  const [dniFile,     setDniFile]     = useState(null)
+  const [selfieFile,  setSelfieFile]  = useState(null)
+  const [dniValido,   setDniValido]   = useState(null)
+  const [msg,   setMsg]   = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [validandoDni, setValidandoDni] = useState(false)
-  const navigate = useNavigate()
-  const dniRef = useRef()
-  const selfieRef = useRef()
+  const [loading,       setLoading]       = useState(false)
+  const [validandoDni,  setValidandoDni]  = useState(false)
+  const navigate   = useNavigate()
+  const dniRef     = useRef()
+  const selfieRef  = useRef()
 
   useEffect(() => { cargar() }, [])
 
@@ -39,133 +43,129 @@ export default function Perfil() {
     }
   }
 
+  const flash = (m, isError = false) => {
+    if (isError) { setError(m); setMsg('') } else { setMsg(m); setError('') }
+    setTimeout(() => { setMsg(''); setError('') }, 4000)
+  }
+
   const actualizar = async (e) => {
     e.preventDefault()
-    setError('')
     try {
       await api.put(`/perfil/actualizar?nombre=${encodeURIComponent(nombre)}&telefono=${encodeURIComponent(telefono)}`)
-      setMsg('Perfil actualizado')
+      flash('Perfil actualizado correctamente')
       cargar()
-      setTimeout(() => setMsg(''), 3000)
-    } catch {
-      setError('Error al actualizar perfil')
-    }
+    } catch { flash('Error al actualizar perfil', true) }
   }
 
   const validarDni = async () => {
-    if (!/^\d{8}$/.test(dniNumero)) {
-      setError('El DNI debe tener exactamente 8 dígitos')
-      return
-    }
+    if (!/^\d{8}$/.test(dniNumero)) { flash('El DNI debe tener exactamente 8 dígitos', true); return }
     setValidandoDni(true)
-    setError('')
     try {
       const res = await api.post(`/perfil/validar-dni?numero_dni=${dniNumero}`)
       setDniValido(res.data)
-      setMsg(res.data.verificado_reniec
+      flash(res.data.verificado_reniec
         ? `DNI verificado en RENIEC: ${res.data.nombre_reniec}`
         : 'Formato de DNI válido — guardado correctamente')
-      setTimeout(() => setMsg(''), 5000)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Error al validar DNI')
-    }
+    } catch (e) { flash(e.response?.data?.detail || 'Error al validar DNI', true) }
     setValidandoDni(false)
   }
 
   const verificar = async (e) => {
     e.preventDefault()
-    if (!dniFile || !selfieFile) {
-      setError('Debes subir ambas imágenes')
-      return
-    }
+    if (!dniFile || !selfieFile) { flash('Debes subir ambas imágenes', true); return }
     setLoading(true)
-    setError('')
     try {
-      const formData = new FormData()
-      formData.append('dni', dniFile)
-      formData.append('selfie', selfieFile)
-      await api.post('/perfil/verificar', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      setMsg('Documentos recibidos. Tu identidad será verificada en breve.')
-      setDniFile(null)
-      setSelfieFile(null)
+      const fd = new FormData()
+      fd.append('dni', dniFile)
+      fd.append('selfie', selfieFile)
+      await api.post('/perfil/verificar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      flash('Documentos recibidos. Tu identidad será verificada en breve.')
+      setDniFile(null); setSelfieFile(null)
       cargar()
-      setTimeout(() => setMsg(''), 5000)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Error al enviar documentos')
-    }
+    } catch (e) { flash(e.response?.data?.detail || 'Error al enviar documentos', true) }
     setLoading(false)
   }
 
   const ev = perfil ? ESTADO_VERIF[perfil.verificado] : null
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-layout">
       <Sidebar />
 
-      <div style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
-        <div style={{ maxWidth: '700px' }}>
-          <h1 style={{ fontFamily: 'Syne', fontSize: '20px', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: '4px' }}>
-            Mi perfil
-          </h1>
-          <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '24px' }}>
-            Gestiona tu información y verificación de identidad
-          </p>
+      <main className="main-content" style={{ padding: '28px 32px' }}>
+        <div style={{ maxWidth: '720px' }}>
 
-          {msg && (
-            <div style={{ background: 'var(--green-bg)', border: '0.5px solid rgba(46,204,138,0.2)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--green)', marginBottom: '16px' }}>
-              {msg}
-            </div>
-          )}
-          {error && (
-            <div style={{ background: 'rgba(248,113,113,0.08)', border: '0.5px solid rgba(248,113,113,0.2)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--red)', marginBottom: '16px' }}>
-              {error}
-            </div>
-          )}
+          {/* ── Header ── */}
+          <div style={{ marginBottom: '26px' }}>
+            <h1 style={{ fontFamily: 'Syne', fontSize: '22px', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '3px' }}>
+              Mi perfil
+            </h1>
+            <p style={{ fontSize: '13px', color: 'var(--text3)' }}>
+              Gestiona tu información y verificación de identidad
+            </p>
+          </div>
+
+          {msg   && <div className="alert alert-success">{msg}</div>}
+          {error && <div className="alert alert-error">{error}</div>}
 
           {perfil && (
             <>
+              {/* ── Profile card ── */}
               <div className="card" style={{ marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+
+                {/* Avatar row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--border)' }}>
                   <div style={{
-                    width: '48px', height: '48px', borderRadius: '50%',
-                    background: 'var(--surface2)', border: '0.5px solid var(--border)',
+                    width: '52px', height: '52px', borderRadius: '50%',
+                    background: 'var(--green-bg)', border: '1px solid rgba(34,197,94,0.25)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '16px', fontWeight: 500, color: '#A8CDEE', flexShrink: 0,
+                    fontFamily: 'Syne', fontSize: '18px', fontWeight: 700, color: 'var(--green)',
+                    flexShrink: 0,
                   }}>
                     {perfil.nombre.slice(0, 2).toUpperCase()}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '15px', fontWeight: 500 }}>{perfil.nombre}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--muted)' }}>{perfil.email}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px' }}>{perfil.nombre}</div>
+                    <div style={{ fontSize: '12.5px', color: 'var(--text3)' }}>{perfil.email}</div>
                   </div>
                   {ev && (
                     <div style={{
-                      padding: '4px 12px', borderRadius: '20px', fontSize: '11px',
-                      fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em',
-                      background: ev.bg, color: ev.color,
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '5px 12px', borderRadius: '99px', fontSize: '11px',
+                      fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em',
+                      background: ev.bg, color: ev.color, flexShrink: 0,
                     }}>
+                      <ev.icon size={12} />
                       {ev.label}
                     </div>
                   )}
                 </div>
 
-                <div className="label" style={{ marginBottom: '14px' }}>Información personal</div>
+                {/* Edit form */}
+                <p className="label" style={{ marginBottom: '16px' }}>Información personal</p>
                 <form onSubmit={actualizar}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }} className="grid-1-mobile">
                     <div className="form-group">
-                      <label className="label">Nombre</label>
+                      <label className="label">
+                        <User size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                        Nombre
+                      </label>
                       <input value={nombre} onChange={e => setNombre(e.target.value)} required />
                     </div>
                     <div className="form-group">
-                      <label className="label">Teléfono</label>
-                      <input value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="987654321" />
+                      <label className="label">
+                        <Phone size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                        Teléfono
+                      </label>
+                      <input value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="987 654 321" />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="label">Email</label>
-                    <input value={perfil.email} disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} />
+                    <label className="label">
+                      <Mail size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                      Email
+                    </label>
+                    <input value={perfil.email} disabled />
                   </div>
                   <button type="submit" className="btn-secondary" style={{ width: 'auto', padding: '8px 20px' }}>
                     Guardar cambios
@@ -173,36 +173,67 @@ export default function Perfil() {
                 </form>
               </div>
 
+              {/* ── Verification card ── */}
               {perfil.verificado === 'verificado' ? (
-                <div className="card" style={{ textAlign: 'center', padding: '32px' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '10px', color: 'var(--green)' }}>✓</div>
-                  <div style={{ fontFamily: 'Syne', fontSize: '16px', fontWeight: 600, color: 'var(--green)', marginBottom: '6px' }}>
+                <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+                  <div style={{
+                    width: '56px', height: '56px', borderRadius: '16px',
+                    background: 'var(--green-bg)', border: '1px solid rgba(34,197,94,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+                  }}>
+                    <CheckCircle2 size={26} color="var(--green)" />
+                  </div>
+                  <h3 style={{ fontFamily: 'Syne', fontSize: '17px', fontWeight: 700, color: 'var(--green)', marginBottom: '8px' }}>
                     Identidad verificada
-                  </div>
-                  <p style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                    Tu cuenta está verificada. Los compradores y vendedores pueden confiar en ti.
+                  </h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text3)', maxWidth: '360px', margin: '0 auto', lineHeight: 1.6 }}>
+                    Tu cuenta está verificada. Los compradores y vendedores pueden confiar plenamente en ti.
                   </p>
                 </div>
+
               ) : perfil.verificado === 'pendiente' ? (
-                <div className="card" style={{ textAlign: 'center', padding: '32px' }}>
-                  <div style={{ fontSize: '28px', marginBottom: '10px' }}>⏳</div>
-                  <div style={{ fontFamily: 'Syne', fontSize: '15px', fontWeight: 600, color: 'var(--amber)', marginBottom: '6px' }}>
-                    Verificación en proceso
+                <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+                  <div style={{
+                    width: '56px', height: '56px', borderRadius: '16px',
+                    background: 'var(--amber-bg)', border: '1px solid rgba(245,158,11,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+                  }}>
+                    <Clock size={26} color="var(--amber)" />
                   </div>
-                  <p style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                    Tus documentos están siendo revisados. Te notificaremos cuando tu cuenta sea verificada.
+                  <h3 style={{ fontFamily: 'Syne', fontSize: '17px', fontWeight: 700, color: 'var(--amber)', marginBottom: '8px' }}>
+                    Verificación en proceso
+                  </h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text3)', maxWidth: '360px', margin: '0 auto', lineHeight: 1.6 }}>
+                    Tus documentos están siendo revisados. Te notificaremos cuando tu cuenta sea verificada (máx. 24h).
                   </p>
                 </div>
+
               ) : (
                 <div className="card">
-                  <div className="label" style={{ marginBottom: '6px' }}>Verificación de identidad</div>
-                  <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '20px', lineHeight: 1.6 }}>
-                    Verifica tu identidad para generar más confianza. Necesitas tu número de DNI, una foto del DNI y una selfie sosteniéndolo.
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Shield size={14} color="var(--text3)" />
+                    <span className="label" style={{ margin: 0 }}>Verificación de identidad</span>
+                  </div>
+                  <p style={{ fontSize: '12.5px', color: 'var(--text2)', marginBottom: '22px', lineHeight: 1.65 }}>
+                    Verifica tu identidad con tu DNI para generar más confianza en las operaciones.
+                    Solo necesitas tu número de DNI, una foto del documento y una selfie sosteniéndolo.
                   </p>
 
-                  {/* DNI Number Validation */}
-                  <div style={{ marginBottom: '20px', paddingBottom: '20px', borderBottom: '0.5px solid var(--border)' }}>
-                    <div className="label" style={{ marginBottom: '8px' }}>Paso 1 — Número de DNI</div>
+                  {/* Step 1 — DNI number */}
+                  <div style={{ marginBottom: '22px', paddingBottom: '22px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{
+                        width: '22px', height: '22px', borderRadius: '50%',
+                        background: dniValido ? 'var(--green-bg)' : 'var(--surface2)',
+                        border: `1px solid ${dniValido ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '10px', fontWeight: 700,
+                        color: dniValido ? 'var(--green)' : 'var(--text3)',
+                      }}>
+                        {dniValido ? <CheckCircle2 size={12} /> : '1'}
+                      </div>
+                      <span style={{ fontSize: '13px', fontWeight: 500 }}>Número de DNI</span>
+                    </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
                         type="text"
@@ -217,93 +248,96 @@ export default function Perfil() {
                         onClick={validarDni}
                         disabled={validandoDni || dniNumero.length !== 8}
                         className="btn-secondary"
-                        style={{ width: 'auto', padding: '10px 16px', flexShrink: 0 }}
+                        style={{ width: 'auto', padding: '9px 16px', flexShrink: 0, fontSize: '12.5px' }}
                       >
-                        {validandoDni ? 'Validando...' : 'Validar DNI'}
+                        {validandoDni ? 'Validando...' : 'Validar'}
                       </button>
                     </div>
                     {dniValido && (
-                      <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--green)' }}>
-                        ✓ DNI válido{dniValido.nombre_reniec ? ` · ${dniValido.nombre_reniec}` : ''}
+                      <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--green)' }}>
+                        <CheckCircle2 size={13} />
+                        DNI válido{dniValido.nombre_reniec ? ` · ${dniValido.nombre_reniec}` : ''}
                       </div>
                     )}
                   </div>
 
-                  {/* Document Upload */}
-                  <div className="label" style={{ marginBottom: '12px' }}>Paso 2 — Documentos fotográficos</div>
+                  {/* Step 2 — Photos */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <div style={{
+                      width: '22px', height: '22px', borderRadius: '50%',
+                      background: (dniFile && selfieFile) ? 'var(--green-bg)' : 'var(--surface2)',
+                      border: `1px solid ${(dniFile && selfieFile) ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '10px', fontWeight: 700,
+                      color: (dniFile && selfieFile) ? 'var(--green)' : 'var(--text3)',
+                    }}>
+                      {(dniFile && selfieFile) ? <CheckCircle2 size={12} /> : '2'}
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>Documentos fotográficos</span>
+                  </div>
+
                   <form onSubmit={verificar}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }} className="grid-1-mobile">
+                      {/* DNI photo */}
                       <div>
                         <div className="label" style={{ marginBottom: '8px' }}>Foto del DNI</div>
                         <div
                           onClick={() => dniRef.current.click()}
                           style={{
                             background: 'var(--surface2)',
-                            border: `0.5px solid ${dniFile ? 'var(--green)' : 'var(--border)'}`,
-                            borderRadius: '8px',
-                            padding: '20px',
+                            border: `1px dashed ${dniFile ? 'var(--green)' : 'var(--border2)'}`,
+                            borderRadius: 'var(--radius)',
+                            padding: '22px 12px',
                             textAlign: 'center',
                             cursor: 'pointer',
-                            transition: 'border-color 0.2s',
+                            transition: 'border-color 0.2s, background 0.2s',
+                            background: dniFile ? 'var(--green-bg)' : 'var(--surface2)',
                           }}
                         >
-                          <div style={{ fontSize: '24px', marginBottom: '6px' }}>🪪</div>
-                          <div style={{ fontSize: '11px', color: dniFile ? 'var(--green)' : 'var(--muted)' }}>
-                            {dniFile ? dniFile.name : 'Haz clic para subir'}
+                          {dniFile
+                            ? <CheckCircle2 size={24} color="var(--green)" style={{ margin: '0 auto 8px' }} />
+                            : <Upload size={22} color="var(--text3)" style={{ margin: '0 auto 8px' }} />
+                          }
+                          <div style={{ fontSize: '11.5px', color: dniFile ? 'var(--green)' : 'var(--text3)' }}>
+                            {dniFile ? dniFile.name.substring(0, 20) + (dniFile.name.length > 20 ? '…' : '') : 'Clic para subir'}
                           </div>
                         </div>
-                        <input
-                          ref={dniRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={e => setDniFile(e.target.files[0])}
-                          style={{ display: 'none' }}
-                        />
+                        <input ref={dniRef} type="file" accept="image/*" onChange={e => setDniFile(e.target.files[0])} style={{ display: 'none' }} />
                       </div>
 
+                      {/* Selfie */}
                       <div>
                         <div className="label" style={{ marginBottom: '8px' }}>Selfie con DNI</div>
                         <div
                           onClick={() => selfieRef.current.click()}
                           style={{
-                            background: 'var(--surface2)',
-                            border: `0.5px solid ${selfieFile ? 'var(--green)' : 'var(--border)'}`,
-                            borderRadius: '8px',
-                            padding: '20px',
+                            background: selfieFile ? 'var(--green-bg)' : 'var(--surface2)',
+                            border: `1px dashed ${selfieFile ? 'var(--green)' : 'var(--border2)'}`,
+                            borderRadius: 'var(--radius)',
+                            padding: '22px 12px',
                             textAlign: 'center',
                             cursor: 'pointer',
-                            transition: 'border-color 0.2s',
+                            transition: 'border-color 0.2s, background 0.2s',
                           }}
                         >
-                          <div style={{ fontSize: '24px', marginBottom: '6px' }}>🤳</div>
-                          <div style={{ fontSize: '11px', color: selfieFile ? 'var(--green)' : 'var(--muted)' }}>
-                            {selfieFile ? selfieFile.name : 'Haz clic para subir'}
+                          {selfieFile
+                            ? <CheckCircle2 size={24} color="var(--green)" style={{ margin: '0 auto 8px' }} />
+                            : <Camera size={22} color="var(--text3)" style={{ margin: '0 auto 8px' }} />
+                          }
+                          <div style={{ fontSize: '11.5px', color: selfieFile ? 'var(--green)' : 'var(--text3)' }}>
+                            {selfieFile ? selfieFile.name.substring(0, 20) + (selfieFile.name.length > 20 ? '…' : '') : 'Clic para subir'}
                           </div>
                         </div>
-                        <input
-                          ref={selfieRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={e => setSelfieFile(e.target.files[0])}
-                          style={{ display: 'none' }}
-                        />
+                        <input ref={selfieRef} type="file" accept="image/*" onChange={e => setSelfieFile(e.target.files[0])} style={{ display: 'none' }} />
                       </div>
                     </div>
 
-                    <div style={{
-                      background: 'var(--amber-bg)',
-                      border: '0.5px solid rgba(245,158,11,0.2)',
-                      borderRadius: '8px',
-                      padding: '10px 12px',
-                      marginBottom: '14px',
-                    }}>
-                      <p style={{ fontSize: '11px', color: 'var(--amber)', lineHeight: 1.5 }}>
-                        Tus documentos se almacenan de forma segura y solo son visibles para el equipo de verificación. La revisión tarda máximo 24 horas.
-                      </p>
+                    <div className="alert alert-warning" style={{ marginBottom: '14px', fontSize: '11.5px' }}>
+                      Tus documentos se almacenan de forma segura y solo son visibles para el equipo de verificación. La revisión tarda máximo 24 horas.
                     </div>
 
                     <button type="submit" disabled={loading} className="btn-primary">
-                      {loading ? 'Enviando...' : 'Enviar documentos para verificación'}
+                      {loading ? 'Enviando...' : <><Upload size={14} /> Enviar documentos para verificación</>}
                     </button>
                   </form>
                 </div>
@@ -311,7 +345,7 @@ export default function Perfil() {
             </>
           )}
         </div>
-      </div>
+      </main>
     </div>
   )
 }

@@ -1,12 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import {
+  ArrowLeft, ShieldCheck, Truck, MessageSquare,
+  CheckCircle2, Circle, Send, ExternalLink, Paperclip,
+  Link2, Package, ChevronRight,
+} from 'lucide-react'
 import api from '../services/api'
 
-const ESTADO_COLOR = {
-  retenido: 'var(--amber)',
-  liberado: 'var(--green)',
-  cancelado: 'var(--red)',
-  expirado: 'var(--muted)',
+/* ── constants ── */
+const ESTADO_MAP = {
+  retenido:  { color: 'var(--amber)', bg: 'var(--amber-bg)',       label: 'Retenido' },
+  liberado:  { color: 'var(--green)', bg: 'var(--green-bg)',       label: 'Liberado' },
+  cancelado: { color: 'var(--red)',   bg: 'rgba(248,113,113,0.1)', label: 'Cancelado' },
+  expirado:  { color: 'var(--text3)', bg: 'rgba(82,82,91,0.15)',   label: 'Expirado' },
 }
 
 const EMPRESAS = [
@@ -15,10 +21,10 @@ const EMPRESAS = [
 ]
 
 const TRACKING_ESTADOS = [
-  { key: null, label: 'Orden creada' },
+  { key: null,         label: 'Orden creada' },
   { key: 'preparando', label: 'Preparando envío' },
-  { key: 'en_camino', label: 'En camino' },
-  { key: 'entregado', label: 'Entregado' },
+  { key: 'en_camino',  label: 'En camino' },
+  { key: 'entregado',  label: 'Entregado' },
   { key: 'confirmado', label: 'Confirmado' },
 ]
 
@@ -27,30 +33,52 @@ function trackingDone(envioEstado, escrowEstado, step) {
   if (step === 'confirmado') return escrowEstado === 'liberado'
   if (!envioEstado) return false
   const order = ['preparando', 'en_camino', 'entregado', 'confirmado']
-  const envioIdx = order.indexOf(envioEstado)
-  const stepIdx = order.indexOf(step)
-  return envioIdx >= stepIdx
+  return order.indexOf(envioEstado) >= order.indexOf(step)
+}
+
+/* ── Tab button ── */
+function Tab({ active, onClick, icon: Icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+        padding: '7px',
+        background: active ? 'var(--surface)' : 'transparent',
+        border: active ? '1px solid var(--border)' : '1px solid transparent',
+        borderRadius: '6px',
+        fontSize: '12px',
+        color: active ? 'var(--text)' : 'var(--text3)',
+        fontWeight: active ? 500 : 400,
+        transition: 'all 0.15s',
+      }}
+    >
+      <Icon size={13} />
+      {label}
+    </button>
+  )
 }
 
 export default function Operacion() {
   const { escrowId } = useParams()
   const navigate = useNavigate()
 
-  const [escrow, setEscrow] = useState(null)
+  const [escrow,    setEscrow]    = useState(null)
   const [evidencias, setEvidencias] = useState([])
-  const [envio, setEnvio] = useState(null)
-  const [mensajes, setMensajes] = useState([])
+  const [envio,     setEnvio]     = useState(null)
+  const [mensajes,  setMensajes]  = useState([])
 
-  const [link, setLink] = useState('')
-  const [descLink, setDescLink] = useState('')
-  const [archivo, setArchivo] = useState(null)
+  const [link, setLink]           = useState('')
+  const [descLink, setDescLink]   = useState('')
+  const [archivo, setArchivo]     = useState(null)
   const [descArchivo, setDescArchivo] = useState('')
 
   const [envioForm, setEnvioForm] = useState({ empresa: 'Serpost', numero_guia: '', descripcion_producto: '' })
-
   const [chatInput, setChatInput] = useState('')
-  const [tab, setTab] = useState('evidencia') // evidencia | envio | chat
-  const [msg, setMsg] = useState('')
+  const [tab, setTab]             = useState('evidencia')
+
+  const [msg,   setMsg]   = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -59,16 +87,12 @@ export default function Operacion() {
 
   useEffect(() => {
     cargarDatos()
-    pollRef.current = setInterval(() => {
-      cargarChat()
-    }, 3000)
+    pollRef.current = setInterval(cargarChat, 3000)
     return () => clearInterval(pollRef.current)
   }, [])
 
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight
-    }
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight
   }, [mensajes])
 
   const cargarDatos = async () => {
@@ -95,15 +119,19 @@ export default function Operacion() {
     } catch {}
   }
 
+  const flash = (m, isError = false) => {
+    if (isError) setError(m); else setMsg(m)
+    setTimeout(() => { setMsg(''); setError('') }, 3500)
+  }
+
   const confirmar = async () => {
     setLoading(true)
-    setError('')
     try {
       await api.post(`/escrow/confirmar/${escrowId}`)
-      setMsg('Fondos liberados al vendedor exitosamente')
+      flash('Fondos liberados al vendedor exitosamente')
       cargarDatos()
     } catch (e) {
-      setError(e.response?.data?.detail || 'Error al confirmar')
+      flash(e.response?.data?.detail || 'Error al confirmar', true)
     }
     setLoading(false)
   }
@@ -111,76 +139,56 @@ export default function Operacion() {
   const cancelar = async () => {
     if (!window.confirm('¿Seguro que deseas cancelar y devolver los fondos?')) return
     setLoading(true)
-    setError('')
     try {
       await api.post(`/escrow/cancelar/${escrowId}`)
-      setMsg('Escrow cancelado. Fondos devueltos.')
+      flash('Escrow cancelado. Fondos devueltos.')
       cargarDatos()
     } catch (e) {
-      setError(e.response?.data?.detail || 'Error al cancelar')
+      flash(e.response?.data?.detail || 'Error al cancelar', true)
     }
     setLoading(false)
   }
 
   const subirLink = async (e) => {
     e.preventDefault()
-    setError('')
     try {
       await api.post(`/evidencia/subir-link/${escrowId}?link=${encodeURIComponent(link)}&descripcion=${encodeURIComponent(descLink)}`)
-      setLink('')
-      setDescLink('')
-      setMsg('Evidencia registrada')
+      setLink(''); setDescLink('')
+      flash('Evidencia registrada')
       cargarDatos()
-      setTimeout(() => setMsg(''), 3000)
-    } catch {
-      setError('Error al registrar evidencia')
-    }
+    } catch { flash('Error al registrar evidencia', true) }
   }
 
   const subirArchivo = async (e) => {
     e.preventDefault()
     if (!archivo) return
-    const formData = new FormData()
-    formData.append('archivo', archivo)
-    formData.append('descripcion', descArchivo || 'Evidencia del producto')
+    const fd = new FormData()
+    fd.append('archivo', archivo)
+    fd.append('descripcion', descArchivo || 'Evidencia del producto')
     try {
-      await api.post(`/evidencia/subir-archivo/${escrowId}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      setArchivo(null)
-      setDescArchivo('')
-      setMsg('Archivo subido correctamente')
+      await api.post(`/evidencia/subir-archivo/${escrowId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setArchivo(null); setDescArchivo('')
+      flash('Archivo subido correctamente')
       cargarDatos()
-      setTimeout(() => setMsg(''), 3000)
-    } catch {
-      setError('Error al subir archivo')
-    }
+    } catch { flash('Error al subir archivo', true) }
   }
 
   const registrarEnvio = async (e) => {
     e.preventDefault()
-    setError('')
     try {
       await api.post(`/envio/${escrowId}`, envioForm)
-      setMsg('Envío registrado correctamente')
+      flash('Envío registrado correctamente')
       cargarDatos()
       setTab('evidencia')
-      setTimeout(() => setMsg(''), 3000)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Error al registrar envío')
-    }
+    } catch (e) { flash(e.response?.data?.detail || 'Error al registrar envío', true) }
   }
 
   const actualizarEstadoEnvio = async (nuevoEstado) => {
-    setError('')
     try {
       await api.put(`/envio/${escrowId}/estado?estado=${nuevoEstado}`)
-      setMsg(`Estado actualizado: ${nuevoEstado}`)
+      flash(`Estado actualizado: ${nuevoEstado}`)
       cargarDatos()
-      setTimeout(() => setMsg(''), 3000)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Error al actualizar estado')
-    }
+    } catch (e) { flash(e.response?.data?.detail || 'Error al actualizar estado', true) }
   }
 
   const enviarMensaje = async (e) => {
@@ -191,128 +199,134 @@ export default function Operacion() {
     try {
       await api.post(`/chat/${escrowId}`, { contenido: texto })
       cargarChat()
-    } catch {
-      setChatInput(texto)
-    }
+    } catch { setChatInput(texto) }
   }
 
   const esComprador = escrow?.rol === 'comprador'
-  const esVendedor = escrow?.rol === 'vendedor'
+  const esVendedor  = escrow?.rol === 'vendedor'
+  const estadoInfo  = escrow ? (ESTADO_MAP[escrow.estado] || ESTADO_MAP.expirado) : null
 
+  /* progress steps */
   const pasos = [
-    { label: 'Pago iniciado', done: true },
-    { label: 'Fondos retenidos en escrow', done: true },
-    { label: 'Vendedor sube evidencia', done: evidencias.length > 0 },
-    { label: 'Comprador confirma recepción', done: escrow?.estado === 'liberado' },
-    { label: 'Fondos liberados al vendedor', done: escrow?.estado === 'liberado' },
+    { label: 'Pago iniciado',                 done: true },
+    { label: 'Fondos retenidos',              done: true },
+    { label: 'Evidencia subida',              done: evidencias.length > 0 },
+    { label: 'Comprador confirma recepción',  done: escrow?.estado === 'liberado' },
+    { label: 'Fondos liberados al vendedor',  done: escrow?.estado === 'liberado' },
+  ]
+
+  const tabs = [
+    { key: 'evidencia', label: 'Evidencia',       icon: Package },
+    ...(esVendedor && escrow?.estado === 'retenido' ? [{ key: 'envio', label: 'Envío', icon: Truck }] : []),
   ]
 
   return (
-    <div style={{ minHeight: '100vh', padding: '20px 24px' }}>
-      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '24px' }}>
+      <div style={{ maxWidth: '1020px', margin: '0 auto' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '22px' }}>
           <button
             onClick={() => navigate('/operaciones')}
-            className="btn-secondary"
-            style={{ width: 'auto', padding: '7px 14px', fontSize: '12px' }}
+            className="btn-ghost"
+            style={{ padding: '7px', color: 'var(--text2)' }}
           >
-            ← Volver
+            <ArrowLeft size={18} />
           </button>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{ fontFamily: 'Syne', fontSize: '17px', fontWeight: 600, letterSpacing: '-0.02em' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h1 style={{
+                fontFamily: 'Syne', fontSize: '18px', fontWeight: 700,
+                letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>
                 {escrow?.descripcion || 'Operación escrow'}
               </h1>
               {escrow && (
-                <span style={{
-                  fontSize: '10px', fontWeight: 500, padding: '2px 10px', borderRadius: '20px',
+                <span className="badge" style={{
                   background: esComprador ? 'var(--green-bg)' : 'var(--amber-bg)',
                   color: esComprador ? 'var(--green)' : 'var(--amber)',
-                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  fontSize: '9.5px', flexShrink: 0,
                 }}>
                   {esComprador ? 'Comprador' : 'Vendedor'}
                 </span>
               )}
             </div>
             {escrow?.contraparte && (
-              <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '2px' }}>
                 {esComprador ? 'Vendedor' : 'Comprador'}: {escrow.contraparte}
               </p>
             )}
           </div>
         </div>
 
-        {msg && (
-          <div style={{ background: 'var(--green-bg)', border: '0.5px solid rgba(46,204,138,0.2)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--green)', marginBottom: '14px' }}>
-            {msg}
-          </div>
-        )}
-        {error && (
-          <div style={{ background: 'rgba(248,113,113,0.08)', border: '0.5px solid rgba(248,113,113,0.2)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--red)', marginBottom: '14px' }}>
-            {error}
-          </div>
-        )}
+        {/* ── Alerts ── */}
+        {msg   && <div className="alert alert-success">{msg}</div>}
+        {error && <div className="alert alert-error">{error}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+        {/* ── Two-column layout ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }} className="grid-1-mobile">
 
-          {/* LEFT COLUMN */}
+          {/* ───── LEFT ───── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-            {/* Estado */}
+            {/* Estado card */}
             <div className="card">
-              <div className="label" style={{ marginBottom: '14px' }}>Estado de la operación</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                <span className="label" style={{ margin: 0 }}>Estado de la operación</span>
+                {estadoInfo && (
+                  <span className="badge" style={{ background: estadoInfo.bg, color: estadoInfo.color, fontSize: '9.5px' }}>
+                    {estadoInfo.label}
+                  </span>
+                )}
+              </div>
+
               {escrow && (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                    <div style={{ fontFamily: 'Syne', fontSize: '28px', fontWeight: 600, color: ESTADO_COLOR[escrow.estado] }}>
-                      S/ {Number(escrow.monto_retenido).toFixed(2)}
-                    </div>
-                    <div style={{
-                      borderRadius: '20px', padding: '4px 12px', fontSize: '11px',
-                      color: ESTADO_COLOR[escrow.estado], fontWeight: 500,
-                      textTransform: 'uppercase', letterSpacing: '0.08em',
-                      background: escrow.estado === 'retenido' ? 'var(--amber-bg)'
-                        : escrow.estado === 'liberado' ? 'var(--green-bg)'
-                        : 'rgba(248,113,113,0.08)',
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '22px' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text3)', fontWeight: 500 }}>S/</span>
+                    <span style={{
+                      fontFamily: 'Syne', fontSize: '38px', fontWeight: 800,
+                      color: estadoInfo.color, letterSpacing: '-0.04em', lineHeight: 1,
                     }}>
-                      {escrow.estado}
-                    </div>
+                      {Number(escrow.monto_retenido).toFixed(2)}
+                    </span>
                   </div>
 
+                  {/* Progress steps */}
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {pasos.map((paso, i) => (
                       <div key={i}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '9px', height: '9px', borderRadius: '50%',
-                            background: paso.done ? 'var(--green)' : 'var(--border)',
-                            flexShrink: 0,
-                          }} />
-                          <span style={{ fontSize: '12px', color: paso.done ? 'var(--text)' : 'var(--muted)', fontWeight: paso.done ? 500 : 400 }}>
+                          {paso.done
+                            ? <CheckCircle2 size={15} color="var(--green)" style={{ flexShrink: 0 }} />
+                            : <Circle size={15} color="var(--border2)" style={{ flexShrink: 0 }} />
+                          }
+                          <span style={{
+                            fontSize: '12.5px',
+                            color: paso.done ? 'var(--text)' : 'var(--text3)',
+                            fontWeight: paso.done ? 500 : 400,
+                          }}>
                             {paso.label}
                           </span>
                         </div>
                         {i < pasos.length - 1 && (
-                          <div style={{ width: '0.5px', height: '14px', background: 'var(--border)', marginLeft: '4px' }} />
+                          <div style={{ width: '1px', height: '12px', background: paso.done ? 'rgba(34,197,94,0.3)' : 'var(--border)', marginLeft: '7px' }} />
                         )}
                       </div>
                     ))}
                   </div>
 
+                  {/* Actions */}
                   {escrow.estado === 'retenido' && (
-                    <div style={{ marginTop: '18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{
-                        background: 'var(--amber-bg)', border: '0.5px solid rgba(245,158,11,0.2)',
-                        borderRadius: '8px', padding: '8px 12px', fontSize: '11px', color: 'var(--amber)',
-                      }}>
-                        Auto-liberación: {new Date(escrow.expira_en).toLocaleString('es-PE')}
+                    <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div className="alert alert-warning" style={{ margin: 0, fontSize: '11.5px' }}>
+                        Auto-liberación: {new Date(escrow.expira_en).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </div>
                       {esComprador && (
                         <>
                           <button onClick={confirmar} disabled={loading} className="btn-primary">
-                            {loading ? 'Procesando...' : 'Confirmar que recibí el producto'}
+                            {loading ? 'Procesando...' : <><CheckCircle2 size={14} /> Confirmar que recibí el producto</>}
                           </button>
                           <button onClick={cancelar} disabled={loading} className="btn-danger">
                             Cancelar y devolver fondos
@@ -320,10 +334,9 @@ export default function Operacion() {
                         </>
                       )}
                       {esVendedor && (
-                        <div style={{
-                          background: 'var(--surface2)', border: '0.5px solid var(--border)',
-                          borderRadius: '8px', padding: '10px 14px', fontSize: '12px',
-                          color: 'var(--text2)', textAlign: 'center',
+                        <div className="card" style={{
+                          background: 'var(--surface2)', border: '1px solid var(--border)',
+                          padding: '12px 14px', textAlign: 'center', fontSize: '12.5px', color: 'var(--text2)',
                         }}>
                           Esperando confirmación del comprador
                         </div>
@@ -334,203 +347,201 @@ export default function Operacion() {
               )}
             </div>
 
-            {/* Tracking */}
+            {/* Tracking card */}
             <div className="card">
-              <div className="label" style={{ marginBottom: '14px' }}>Seguimiento del envío</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <Truck size={14} color="var(--text3)" />
+                <span className="label" style={{ margin: 0 }}>Seguimiento del envío</span>
+              </div>
 
-              {!envio ? (
-                <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--muted)', fontSize: '12px' }}>
-                  {esVendedor
-                    ? 'Registra el envío para que el comprador pueda seguirlo'
-                    : 'El vendedor aún no ha registrado el envío'}
-                </div>
-              ) : (
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                    <div style={{ flex: 1, background: 'var(--surface2)', borderRadius: '8px', padding: '10px 12px' }}>
-                      <div className="label">Empresa</div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, marginTop: '2px' }}>{envio.empresa}</div>
-                    </div>
-                    <div style={{ flex: 1, background: 'var(--surface2)', borderRadius: '8px', padding: '10px 12px' }}>
-                      <div className="label">N° de guía</div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, marginTop: '2px', fontFamily: 'monospace' }}>{envio.numero_guia}</div>
-                    </div>
+              {envio && (
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                  <div style={{ flex: 1, background: 'var(--surface2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                    <div className="label" style={{ fontSize: '9.5px', marginBottom: '3px' }}>Empresa</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600 }}>{envio.empresa}</div>
+                  </div>
+                  <div style={{ flex: 1, background: 'var(--surface2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                    <div className="label" style={{ fontSize: '9.5px', marginBottom: '3px' }}>N° de guía</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.03em' }}>{envio.numero_guia}</div>
                   </div>
                 </div>
               )}
 
+              {!envio && (
+                <div style={{ textAlign: 'center', padding: '12px 0 16px', color: 'var(--text3)', fontSize: '12.5px' }}>
+                  {esVendedor ? 'Registra el envío para que el comprador pueda seguirlo' : 'El vendedor aún no ha registrado el envío'}
+                </div>
+              )}
+
+              {/* Timeline */}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {TRACKING_ESTADOS.map((step, i) => {
-                  const done = trackingDone(envio?.estado, escrow?.estado, step.key)
+                  const done    = trackingDone(envio?.estado, escrow?.estado, step.key)
                   const current = envio?.estado === step.key && escrow?.estado !== 'liberado'
                   return (
                     <div key={i}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{
                           width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
-                          background: done ? 'var(--green)' : current ? 'var(--amber)' : 'var(--border)',
-                          boxShadow: current ? '0 0 0 3px rgba(245,158,11,0.15)' : 'none',
+                          background: done ? 'var(--green)' : current ? 'var(--amber)' : 'var(--border2)',
+                          boxShadow: current ? '0 0 0 3px var(--amber-bg)' : 'none',
                         }} />
                         <span style={{
-                          fontSize: '12px',
-                          color: done ? 'var(--text)' : current ? 'var(--amber)' : 'var(--muted)',
+                          fontSize: '12.5px',
+                          color: done ? 'var(--text)' : current ? 'var(--amber)' : 'var(--text3)',
                           fontWeight: done || current ? 500 : 400,
+                          display: 'flex', alignItems: 'center', gap: '6px',
                         }}>
                           {step.label}
-                          {current && <span style={{ fontSize: '10px', marginLeft: '6px', color: 'var(--amber)' }}>← ahora</span>}
+                          {current && (
+                            <span style={{ fontSize: '10px', color: 'var(--amber)', background: 'var(--amber-bg)', padding: '1px 6px', borderRadius: '4px' }}>
+                              ahora
+                            </span>
+                          )}
                         </span>
                       </div>
                       {i < TRACKING_ESTADOS.length - 1 && (
-                        <div style={{ width: '0.5px', height: '14px', background: done ? 'var(--green)' : 'var(--border)', marginLeft: '4.5px', opacity: done ? 0.5 : 1 }} />
+                        <div style={{ width: '1px', height: '12px', background: done ? 'rgba(34,197,94,0.3)' : 'var(--border)', marginLeft: '4.5px' }} />
                       )}
                     </div>
                   )
                 })}
               </div>
 
+              {/* Seller update buttons */}
               {esVendedor && envio && escrow?.estado === 'retenido' && (
                 <div style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {envio.estado !== 'en_camino' && (
-                    <button
-                      onClick={() => actualizarEstadoEnvio('en_camino')}
-                      className="btn-secondary"
-                      style={{ width: 'auto', padding: '7px 14px', fontSize: '11px' }}
-                    >
-                      Marcar en camino
+                    <button onClick={() => actualizarEstadoEnvio('en_camino')} className="btn-secondary" style={{ width: 'auto', padding: '6px 14px', fontSize: '11.5px' }}>
+                      <Truck size={12} /> En camino
                     </button>
                   )}
                   {envio.estado !== 'entregado' && (
-                    <button
-                      onClick={() => actualizarEstadoEnvio('entregado')}
-                      className="btn-secondary"
-                      style={{ width: 'auto', padding: '7px 14px', fontSize: '11px' }}
-                    >
-                      Marcar entregado
+                    <button onClick={() => actualizarEstadoEnvio('entregado')} className="btn-secondary" style={{ width: 'auto', padding: '6px 14px', fontSize: '11.5px' }}>
+                      <CheckCircle2 size={12} /> Marcar entregado
                     </button>
                   )}
                 </div>
               )}
             </div>
+
           </div>
 
-          {/* RIGHT COLUMN */}
+          {/* ───── RIGHT ───── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-            {/* Tabs */}
+            {/* Tabs card */}
             <div className="card" style={{ flex: 1 }}>
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: 'var(--surface2)', borderRadius: '8px', padding: '3px' }}>
-                {[
-                  { key: 'evidencia', label: 'Evidencia' },
-                  ...(esVendedor && escrow?.estado === 'retenido' ? [{ key: 'envio', label: 'Registrar envío' }] : []),
-                ].map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => setTab(t.key)}
-                    style={{
-                      flex: 1,
-                      background: tab === t.key ? 'var(--surface)' : 'transparent',
-                      border: tab === t.key ? '0.5px solid var(--border)' : 'none',
-                      borderRadius: '6px',
-                      padding: '6px',
-                      fontSize: '12px',
-                      color: tab === t.key ? 'var(--text)' : 'var(--muted)',
-                      fontWeight: tab === t.key ? 500 : 400,
-                    }}
-                  >
-                    {t.label}
-                  </button>
+              {/* Tab bar */}
+              <div style={{
+                display: 'flex', gap: '3px',
+                background: 'var(--surface2)', borderRadius: '8px',
+                padding: '3px', marginBottom: '18px',
+              }}>
+                {tabs.map(t => (
+                  <Tab key={t.key} active={tab === t.key} onClick={() => setTab(t.key)} icon={t.icon} label={t.label} />
                 ))}
               </div>
 
+              {/* Evidencia tab */}
               {tab === 'evidencia' && (
                 <>
-                  {esVendedor ? (
+                  {esVendedor && (
                     <>
-                      <div className="label" style={{ marginBottom: '4px' }}>Subir evidencia del producto</div>
-                      <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
-                        Sube fotos o videos mostrando el producto antes del envío
-                      </p>
-                      <form onSubmit={subirLink} style={{ marginBottom: '14px' }}>
+                      <p className="label" style={{ marginBottom: '14px' }}>Subir evidencia del producto</p>
+
+                      <form onSubmit={subirLink} style={{ marginBottom: '18px' }}>
                         <div className="form-group">
-                          <label className="label">Link (YouTube, Drive, etc.)</label>
+                          <label className="label">
+                            <Link2 size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                            Link (YouTube, Drive, etc.)
+                          </label>
                           <input placeholder="https://..." value={link} onChange={e => setLink(e.target.value)} />
                         </div>
                         <div className="form-group">
                           <label className="label">Descripción</label>
-                          <input placeholder="Video del empaque del producto" value={descLink} onChange={e => setDescLink(e.target.value)} />
+                          <input placeholder="Video del empaque" value={descLink} onChange={e => setDescLink(e.target.value)} />
                         </div>
-                        <button type="submit" className="btn-secondary">Registrar link</button>
+                        <button type="submit" className="btn-secondary" style={{ width: 'auto', padding: '7px 14px', fontSize: '12px' }}>
+                          <Link2 size={12} /> Registrar link
+                        </button>
                       </form>
-                      <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '14px' }}>
+
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                         <form onSubmit={subirArchivo}>
                           <div className="form-group">
-                            <label className="label">O sube un archivo</label>
-                            <input
-                              type="file"
-                              accept="image/*,video/*"
-                              onChange={e => setArchivo(e.target.files[0])}
-                              style={{ padding: '6px 10px' }}
-                            />
+                            <label className="label">
+                              <Paperclip size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                              Subir archivo
+                            </label>
+                            <input type="file" accept="image/*,video/*" onChange={e => setArchivo(e.target.files[0])} style={{ padding: '6px 10px' }} />
                           </div>
                           <div className="form-group">
                             <label className="label">Descripción</label>
                             <input placeholder="Descripción del archivo" value={descArchivo} onChange={e => setDescArchivo(e.target.value)} />
                           </div>
-                          <button type="submit" className="btn-secondary">Subir archivo</button>
+                          <button type="submit" className="btn-secondary" style={{ width: 'auto', padding: '7px 14px', fontSize: '12px' }}>
+                            <Paperclip size={12} /> Subir archivo
+                          </button>
                         </form>
                       </div>
                     </>
-                  ) : (
-                    <>
-                      <div className="label" style={{ marginBottom: '4px' }}>Evidencias del vendedor</div>
-                      <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
-                        Revisa las pruebas antes de confirmar la recepción
-                      </p>
-                    </>
                   )}
 
-                  {evidencias.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: esVendedor ? '14px' : '0' }}>
-                      {esVendedor && evidencias.length > 0 && (
-                        <div className="label" style={{ marginBottom: '4px' }}>Evidencias subidas</div>
-                      )}
-                      {evidencias.map(ev => (
-                        <div key={ev.id} style={{ background: 'var(--surface2)', border: '0.5px solid var(--border)', borderRadius: '8px', padding: '10px 12px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 500, marginBottom: '4px' }}>
-                            {ev.descripcion || 'Sin descripción'}
-                          </div>
-                          <a href={ev.url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--green)', wordBreak: 'break-all' }}>
-                            {ev.tipo === 'archivo' ? '📎 Archivo adjunto' : ev.url}
-                          </a>
-                          <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
-                            {new Date(ev.fecha).toLocaleString('es-PE')}
-                          </div>
-                        </div>
-                      ))}
+                  {esComprador && evidencias.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text3)', fontSize: '12.5px' }}>
+                      <Package size={28} color="var(--border2)" style={{ marginBottom: '10px' }} />
+                      <p>El vendedor aún no ha subido evidencia</p>
                     </div>
                   )}
 
-                  {evidencias.length === 0 && esComprador && (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: '12px' }}>
-                      El vendedor aún no ha subido evidencia
+                  {evidencias.length > 0 && (
+                    <div style={{ marginTop: esVendedor ? '16px' : '0' }}>
+                      {esVendedor && <p className="label" style={{ marginBottom: '10px' }}>Evidencias subidas</p>}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {evidencias.map(ev => (
+                          <div key={ev.id} style={{
+                            background: 'var(--surface2)', border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-sm)', padding: '10px 12px',
+                          }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: 500, marginBottom: '5px' }}>
+                              {ev.descripcion || 'Sin descripción'}
+                            </div>
+                            <a href={ev.url} target="_blank" rel="noreferrer" style={{
+                              fontSize: '11.5px', color: 'var(--green)', wordBreak: 'break-all',
+                              display: 'flex', alignItems: 'center', gap: '4px',
+                            }}>
+                              {ev.tipo === 'archivo' ? <><Paperclip size={11} /> Archivo adjunto</> : <><ExternalLink size={11} /> {ev.url.substring(0, 40)}{ev.url.length > 40 ? '…' : ''}</>}
+                            </a>
+                            <div style={{ fontSize: '10.5px', color: 'var(--text3)', marginTop: '5px' }}>
+                              {new Date(ev.fecha).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </>
               )}
 
+              {/* Envio tab */}
               {tab === 'envio' && esVendedor && (
                 <>
-                  {envio ? (
-                    <div style={{ marginBottom: '14px', background: 'var(--surface2)', border: '0.5px solid var(--border)', borderRadius: '8px', padding: '12px 14px' }}>
-                      <div className="label" style={{ marginBottom: '6px' }}>Envío ya registrado</div>
-                      <div style={{ fontSize: '12px' }}>Empresa: <strong>{envio.empresa}</strong></div>
-                      <div style={{ fontSize: '12px' }}>Guía: <strong style={{ fontFamily: 'monospace' }}>{envio.numero_guia}</strong></div>
-                      <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
-                        Puedes actualizar los datos a continuación si hubo un error.
-                      </p>
+                  {envio && (
+                    <div className="alert alert-success" style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '14px' }}>
+                      <Truck size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
+                      <div>
+                        <span style={{ fontWeight: 600 }}>Envío ya registrado: </span>
+                        {envio.empresa} · <span style={{ fontFamily: 'monospace' }}>{envio.numero_guia}</span>
+                        <p style={{ fontSize: '11px', marginTop: '4px', color: 'var(--green)' }}>
+                          Puedes actualizar los datos si hubo un error.
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '14px' }}>
+                  )}
+
+                  {!envio && (
+                    <p style={{ fontSize: '12.5px', color: 'var(--text2)', marginBottom: '16px', lineHeight: 1.6 }}>
                       Registra la empresa de courier y número de guía para que el comprador pueda hacer seguimiento.
                     </p>
                   )}
@@ -538,84 +549,56 @@ export default function Operacion() {
                   <form onSubmit={registrarEnvio}>
                     <div className="form-group">
                       <label className="label">Empresa de envío</label>
-                      <select
-                        value={envioForm.empresa}
-                        onChange={e => setEnvioForm({ ...envioForm, empresa: e.target.value })}
-                      >
-                        {EMPRESAS.map(emp => (
-                          <option key={emp} value={emp}>{emp}</option>
-                        ))}
+                      <select value={envioForm.empresa} onChange={e => setEnvioForm({ ...envioForm, empresa: e.target.value })}>
+                        {EMPRESAS.map(emp => <option key={emp} value={emp}>{emp}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
                       <label className="label">Número de guía / tracking</label>
-                      <input
-                        placeholder="Ej: SP0123456789"
-                        value={envioForm.numero_guia}
-                        onChange={e => setEnvioForm({ ...envioForm, numero_guia: e.target.value })}
-                        required
-                      />
+                      <input placeholder="Ej: SP0123456789" value={envioForm.numero_guia} onChange={e => setEnvioForm({ ...envioForm, numero_guia: e.target.value })} required />
                     </div>
                     <div className="form-group">
-                      <label className="label">Descripción del producto (opcional)</label>
-                      <input
-                        placeholder="iPhone 14 Pro 256GB negro"
-                        value={envioForm.descripcion_producto}
-                        onChange={e => setEnvioForm({ ...envioForm, descripcion_producto: e.target.value })}
-                      />
+                      <label className="label">Descripción del producto <span style={{ color: 'var(--text3)' }}>(opcional)</span></label>
+                      <input placeholder="iPhone 14 Pro 256GB negro" value={envioForm.descripcion_producto} onChange={e => setEnvioForm({ ...envioForm, descripcion_producto: e.target.value })} />
                     </div>
                     <button type="submit" className="btn-primary">
-                      {envio ? 'Actualizar envío' : 'Registrar envío'}
+                      <Truck size={14} /> {envio ? 'Actualizar envío' : 'Registrar envío'}
                     </button>
                   </form>
                 </>
               )}
             </div>
 
-            {/* Chat */}
+            {/* Chat card */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-              <div className="label" style={{ marginBottom: '12px' }}>
-                Chat con {esComprador ? 'el vendedor' : 'el comprador'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <MessageSquare size={14} color="var(--text3)" />
+                <span className="label" style={{ margin: 0 }}>
+                  Chat con {esComprador ? 'el vendedor' : 'el comprador'}
+                </span>
               </div>
 
-              <div
-                ref={chatRef}
-                style={{
-                  height: '220px',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  marginBottom: '10px',
-                  paddingRight: '4px',
-                }}
-              >
+              {/* Messages */}
+              <div ref={chatRef} style={{
+                height: '220px', overflowY: 'auto',
+                display: 'flex', flexDirection: 'column', gap: '8px',
+                marginBottom: '10px',
+              }}>
                 {mensajes.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: '12px' }}>
-                    No hay mensajes aún. Escribe para comenzar.
+                  <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text3)', fontSize: '12.5px' }}>
+                    <MessageSquare size={22} color="var(--border2)" style={{ marginBottom: '8px' }} />
+                    <p>No hay mensajes aún</p>
                   </div>
                 ) : (
                   mensajes.map(m => (
-                    <div
-                      key={m.id}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: m.es_propio ? 'flex-end' : 'flex-start',
-                      }}
-                    >
-                      <div style={{
-                        maxWidth: '80%',
-                        background: m.es_propio ? 'var(--green-bg)' : 'var(--surface2)',
-                        border: `0.5px solid ${m.es_propio ? 'rgba(46,204,138,0.2)' : 'var(--border)'}`,
-                        borderRadius: m.es_propio ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                        padding: '8px 12px',
-                      }}>
-                        <div style={{ fontSize: '12px', color: m.es_propio ? 'var(--green)' : 'var(--text)', lineHeight: 1.5 }}>
-                          {m.contenido}
-                        </div>
+                    <div key={m.id} style={{
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: m.es_propio ? 'flex-end' : 'flex-start',
+                    }}>
+                      <div className={`chat-bubble ${m.es_propio ? 'own' : 'other'}`}>
+                        {m.contenido}
                       </div>
-                      <div style={{ fontSize: '9px', color: 'var(--muted)', marginTop: '3px', paddingLeft: '4px', paddingRight: '4px' }}>
+                      <div style={{ fontSize: '9.5px', color: 'var(--text3)', marginTop: '3px', padding: '0 4px' }}>
                         {m.remitente_nombre} · {new Date(m.creado_en).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
@@ -623,6 +606,7 @@ export default function Operacion() {
                 )}
               </div>
 
+              {/* Input */}
               <form onSubmit={enviarMensaje} style={{ display: 'flex', gap: '8px' }}>
                 <input
                   placeholder="Escribe un mensaje..."
@@ -633,10 +617,10 @@ export default function Operacion() {
                 <button
                   type="submit"
                   className="btn-primary"
-                  style={{ width: 'auto', padding: '10px 16px', flexShrink: 0 }}
+                  style={{ width: 'auto', padding: '9px 14px', flexShrink: 0 }}
                   disabled={!chatInput.trim()}
                 >
-                  →
+                  <Send size={14} />
                 </button>
               </form>
             </div>

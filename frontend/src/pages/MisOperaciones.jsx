@@ -58,9 +58,16 @@ export default function MisOperaciones() {
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {[1, 2, 3].map(i => (
-              <div key={i} className="card" style={{ height: '72px', opacity: 0.4 }}>
-                <div style={{ height: '12px', width: '40%', background: 'var(--surface2)', borderRadius: '4px', marginBottom: '8px' }} />
-                <div style={{ height: '10px', width: '25%', background: 'var(--surface2)', borderRadius: '4px' }} />
+              <div key={i} className="card" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px' }}>
+                <div className="skeleton" style={{ width: '42px', height: '42px', borderRadius: '12px', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div className="skeleton" style={{ height: '13px', width: `${30 + i * 12}%`, marginBottom: '8px' }} />
+                  <div className="skeleton" style={{ height: '10px', width: `${15 + i * 8}%` }} />
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div className="skeleton" style={{ height: '17px', width: '72px', marginBottom: '6px', marginLeft: 'auto' }} />
+                  <div className="skeleton" style={{ height: '18px', width: '52px', borderRadius: '99px', marginLeft: 'auto' }} />
+                </div>
               </div>
             ))}
           </div>
@@ -88,7 +95,7 @@ export default function MisOperaciones() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {operaciones.map(op => {
+            {operaciones.map((op, index) => {
               const estado = ESTADO_MAP[op.estado] || ESTADO_MAP.expirado
               const isComprador = op.rol === 'comprador'
               const Icon = isComprador ? ShoppingBag : Package
@@ -97,14 +104,13 @@ export default function MisOperaciones() {
                 <div
                   key={op.escrow_id}
                   onClick={() => navigate(`/operacion/${op.escrow_id}`)}
-                  className="card"
+                  className="card op-card"
                   style={{
                     display: 'flex', alignItems: 'center', gap: '14px',
-                    cursor: 'pointer', padding: '14px 18px',
-                    transition: 'border-color 0.15s, transform 0.15s',
+                    padding: '14px 18px',
+                    animationDelay: `${index * 45}ms`,
+                    animation: 'fadeUp 0.35s cubic-bezier(0.22,1,0.36,1) both',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 >
                   {/* Role icon */}
                   <div style={{

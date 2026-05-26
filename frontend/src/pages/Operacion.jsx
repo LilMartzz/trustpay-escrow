@@ -221,7 +221,7 @@ export default function Operacion() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '24px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '24px', animation: 'fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both' }}>
       <div style={{ maxWidth: '1020px', margin: '0 auto' }}>
 
         {/* ── Header ── */}
@@ -384,7 +384,7 @@ export default function Operacion() {
                         <div style={{
                           width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
                           background: done ? 'var(--green)' : current ? 'var(--amber)' : 'var(--border2)',
-                          boxShadow: current ? '0 0 0 3px var(--amber-bg)' : 'none',
+                          animation: current ? 'pulse-ring 1.6s ease-out infinite' : 'none',
                         }} />
                         <span style={{
                           fontSize: '12.5px',

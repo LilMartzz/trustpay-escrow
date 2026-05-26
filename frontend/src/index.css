@@ -218,15 +218,51 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important;
 .alert-warning { background: var(--amber-bg); border-color: rgba(245,158,11,0.2); color: var(--amber); }
 
 /* ── ANIMATIONS ── */
-@keyframes fadeUp   { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-@keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
-@keyframes pulse    { 0%,100% { opacity:.6; } 50% { opacity:1; } }
-@keyframes shimmer  { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes fadeUp      { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeIn      { from { opacity:0; } to { opacity:1; } }
+@keyframes pulse       { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+@keyframes shimmer     { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes shimmer-wave {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
 @keyframes slideIn  { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @keyframes spin     { to { transform: rotate(360deg); } }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0px rgba(245,158,11,0.5); }
+  70%  { box-shadow: 0 0 0 7px rgba(245,158,11,0); }
+  100% { box-shadow: 0 0 0 0px rgba(245,158,11,0); }
+}
 
 .fade-up  { animation: fadeUp  0.3s ease both; }
 .fade-in  { animation: fadeIn  0.2s ease both; }
+
+/* ── SKELETON SHIMMER ── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface2) 25%,
+    var(--surface3) 50%,
+    var(--surface2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-wave 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ── PAGE ENTER ── */
+.main-content { animation: fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* ── OPERATION CARD HOVER ── */
+.op-card {
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease !important;
+}
+.op-card:hover {
+  border-color: var(--border2) !important;
+  transform: translateY(-3px) !important;
+  box-shadow: var(--shadow) !important;
+}
 
 /* ── RESPONSIVE ── */
 .app-layout {

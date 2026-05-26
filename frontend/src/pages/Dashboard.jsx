@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Wallet, TrendingUp, Lock, ArrowUpRight, ArrowDownRight,
@@ -7,6 +7,30 @@ import {
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 import EscrowNatural from '../components/EscrowNatural'
+
+/* ── Count-up animation hook ── */
+function useCountUp(target, duration = 750) {
+  const [display, setDisplay] = useState(0)
+  const animRef = useRef(null)
+  const fromRef = useRef(0)
+  useEffect(() => {
+    if (target === null || target === undefined) return
+    const from = fromRef.current
+    const diff = target - from
+    const start = performance.now()
+    cancelAnimationFrame(animRef.current)
+    const tick = (now) => {
+      const t = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplay(from + diff * eased)
+      if (t < 1) animRef.current = requestAnimationFrame(tick)
+      else fromRef.current = target
+    }
+    animRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(animRef.current)
+  }, [target, duration])
+  return display
+}
 
 /* ── helpers historial ── */
 function labelH(t) {
@@ -136,6 +160,10 @@ export default function Dashboard() {
   const saldoDisponible = Number(saldo?.saldo_disponible ?? 0)
   const saldoRetenido   = Number(saldo?.saldo_retenido ?? 0)
 
+  const animTotal      = useCountUp(saldo !== null ? saldoTotal      : null)
+  const animDisponible = useCountUp(saldo !== null ? saldoDisponible : null)
+  const animRetenido   = useCountUp(saldo !== null ? saldoRetenido   : null)
+
   /* ── barra de disponibilidad ── */
   const pctDisp = saldoTotal > 0 ? (saldoDisponible / saldoTotal) * 100 : 100
 
@@ -162,7 +190,7 @@ export default function Dashboard() {
         {/* ══════════════════════════════════════
             ROW 1 — Saldo  |  Nueva operación
         ══════════════════════════════════════ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }} className="grid-1-mobile">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px', animation: 'fadeUp 0.38s cubic-bezier(0.22,1,0.36,1) both', animationDelay: '0ms' }} className="grid-1-mobile">
 
           {/* ── Saldo card (estilo Handstamp) ── */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -190,7 +218,7 @@ export default function Dashboard() {
             <div style={{ marginBottom: '6px' }}>
               <p className="label" style={{ marginBottom: '4px' }}>Saldo total</p>
               <p style={{ fontFamily: 'Syne', fontSize: '42px', fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1, color: 'var(--text)' }}>
-                S/ {saldoTotal.toFixed(2)}
+                S/ {animTotal.toFixed(2)}
               </p>
             </div>
 
@@ -203,12 +231,12 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--green)' }} />
                   <span style={{ fontSize: '11.5px', color: 'var(--text2)' }}>Disponible</span>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)', fontFamily: 'Syne' }}>S/ {saldoDisponible.toFixed(2)}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)', fontFamily: 'Syne' }}>S/ {animDisponible.toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--amber)' }} />
                   <span style={{ fontSize: '11.5px', color: 'var(--text2)' }}>Retenido</span>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--amber)', fontFamily: 'Syne' }}>S/ {saldoRetenido.toFixed(2)}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--amber)', fontFamily: 'Syne' }}>S/ {animRetenido.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -244,7 +272,7 @@ export default function Dashboard() {
         {/* ══════════════════════════════════════
             ROW 2 — Contrapartes  |  Historial
         ══════════════════════════════════════ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '14px' }} className="grid-1-mobile">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '14px', animation: 'fadeUp 0.38s cubic-bezier(0.22,1,0.36,1) both', animationDelay: '90ms' }} className="grid-1-mobile">
 
           {/* ── Contrapartes (estilo "Hosts") ── */}
           <div className="card">

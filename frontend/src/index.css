@@ -223,6 +223,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important;
 @keyframes pulse    { 0%,100% { opacity:.6; } 50% { opacity:1; } }
 @keyframes shimmer  { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 @keyframes slideIn  { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes spin     { to { transform: rotate(360deg); } }
 
 .fade-up  { animation: fadeUp  0.3s ease both; }
 .fade-in  { animation: fadeIn  0.2s ease both; }

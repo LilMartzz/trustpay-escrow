@@ -8,6 +8,7 @@ from database import get_db
 from models import Usuario
 from dependencies import get_usuario_actual
 from rekognition_client import comparar_rostros
+from schemas import FcmTokenRequest
 
 router = APIRouter(prefix="/perfil", tags=["perfil"])
 UPLOAD_DIR = "uploads"
@@ -61,6 +62,17 @@ def ver_perfil(usuario=Depends(get_usuario_actual)):
         "selfie_url": usuario.selfie_url,
         "creado_en": str(usuario.creado_en),
     }
+
+
+@router.post("/fcm-token")
+def guardar_fcm_token(
+    data: FcmTokenRequest,
+    usuario=Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    usuario.fcm_token = data.token
+    db.commit()
+    return {"mensaje": "Token de notificaciones guardado"}
 
 
 @router.put("/actualizar")

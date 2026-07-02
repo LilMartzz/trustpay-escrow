@@ -7,7 +7,9 @@ import {
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 import EscrowNatural from '../components/EscrowNatural'
+import DepositoModal from '../components/DepositoModal'
 import { useAuth } from '../contexts/AuthContext'
+import { activarNotificaciones } from '../notifications'
 
 /* ── Count-up animation hook ── */
 function useCountUp(target, duration = 750) {
@@ -39,6 +41,7 @@ function labelH(t) {
     if (t.estado === 'pendiente') return 'Escrow retenido'
     return t.es_salida ? 'Pago escrow' : 'Cobro escrow'
   }
+  if (t.tipo === 'deposito_culqi') return 'Depósito con tarjeta'
   return t.es_salida ? 'Transferencia enviada' : 'Transferencia recibida'
 }
 function colorH(t) {
@@ -91,7 +94,7 @@ export default function Dashboard() {
   const [msg,   setMsg]   = useState('')
   const [error, setError] = useState('')
   const [copied, setCopied]    = useState(false)
-  const [loadingDep, setLoadingDep] = useState(false)
+  const [mostrarDeposito, setMostrarDeposito] = useState(false)
   const [loadingEsc, setLoadingEsc] = useState(false)
 
   const navigate = useNavigate()
@@ -104,6 +107,7 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [])
   useEffect(() => { cargar() }, [location.key])
+  useEffect(() => { activarNotificaciones() }, [])
 
   const cargar = async () => {
     try {
@@ -125,16 +129,16 @@ export default function Dashboard() {
     setTimeout(() => { setMsg(''); setError('') }, 3500)
   }
 
-  const handleDeposito = async (e) => {
+  const abrirDeposito = (e) => {
     e.preventDefault()
-    setLoadingDep(true)
-    try {
-      await api.post(`/billetera/depositar?monto=${deposito}`)
-      setDeposito('')
-      flash('¡Depósito exitoso!')
-      await cargar()
-    } catch { flash('Error al depositar', true) }
-    setLoadingDep(false)
+    setMostrarDeposito(true)
+  }
+
+  const handleDepositoExitoso = async () => {
+    setMostrarDeposito(false)
+    setDeposito('')
+    flash('¡Depósito exitoso!')
+    await cargar()
   }
 
   const handleEscrow = async ({ monto, email_destino, descripcion }) => {
@@ -246,17 +250,17 @@ export default function Dashboard() {
             {/* Depositar */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: 'auto' }}>
               <p className="label" style={{ marginBottom: '10px' }}>Depositar saldo</p>
-              <form onSubmit={handleDeposito} style={{ display: 'flex', gap: '8px' }}>
+              <form onSubmit={abrirDeposito} style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="number" placeholder="0.00"
                   value={deposito} onChange={e => setDeposito(e.target.value)}
                   min="1" step="0.01" required
                   style={{ flex: 1, fontFamily: 'Syne', fontWeight: 600 }}
                 />
-                <button type="submit" className="btn-primary" disabled={loadingDep}
+                <button type="submit" className="btn-primary"
                   style={{ width: 'auto', padding: '9px 16px', flexShrink: 0 }}>
                   <Plus size={14} />
-                  {loadingDep ? '...' : 'Depositar'}
+                  Depositar
                 </button>
               </form>
             </div>
@@ -421,6 +425,14 @@ export default function Dashboard() {
         </div>
 
       </main>
+
+      {mostrarDeposito && (
+        <DepositoModal
+          montoInicial={deposito}
+          onClose={() => setMostrarDeposito(false)}
+          onSuccess={handleDepositoExitoso}
+        />
+      )}
     </div>
   )
 }

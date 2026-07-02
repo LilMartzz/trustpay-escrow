@@ -21,6 +21,7 @@ class Usuario(Base):
     dni_reverso_url = Column(String, nullable=True)
     selfie_url = Column(String, nullable=True)
     dni_numero = Column(String(8), nullable=True)
+    fcm_token = Column(String, nullable=True)
 
 
 class Billetera(Base):
@@ -42,6 +43,7 @@ class Transaccion(Base):
     tipo = Column(String, default="p2p")
     estado = Column(String, default="pendiente")
     descripcion = Column(String, nullable=True)
+    referencia_externa = Column(String, nullable=True)
     creado_en = Column(DateTime, server_default=func.now())
 
 

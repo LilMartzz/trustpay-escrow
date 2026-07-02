@@ -4,6 +4,7 @@ from database import get_db, SessionLocal
 from models import Billetera, Transaccion, Escrow, Usuario
 from dependencies import get_usuario_actual
 from tasks import procesar_escrows_vencidos
+from notificaciones import enviar_notificacion
 from decimal import Decimal
 from datetime import datetime, timedelta
 
@@ -56,6 +57,12 @@ def iniciar_escrow(
     db.add(escrow)
     db.commit()
 
+    enviar_notificacion(
+        db, destino.id,
+        "Nuevo escrow recibido",
+        f"{usuario.nombre} te envió S/ {monto:.2f} en escrow",
+    )
+
     return {
         "mensaje": f"S/ {monto:.2f} retenido en escrow para {destino.nombre}",
         "transaccion_id": str(transaccion.id),
@@ -98,6 +105,12 @@ def confirmar_escrow(
     escrow.liberado_en = datetime.utcnow()
     db.commit()
 
+    enviar_notificacion(
+        db, billetera_destino.usuario_id,
+        "Pago recibido",
+        f"Recibiste S/ {float(escrow.monto_retenido):.2f} — {usuario.nombre} confirmó la recepción",
+    )
+
     return {
         "mensaje": "Escrow liberado y fondos transferidos exitosamente",
         "monto_transferido": float(escrow.monto_retenido),
@@ -124,11 +137,18 @@ def cancelar_escrow(
         raise HTTPException(status_code=403, detail="Solo el comprador puede cancelar")
 
     billetera_origen = db.query(Billetera).filter(Billetera.id == transaccion.billetera_origen).first()
+    billetera_destino = db.query(Billetera).filter(Billetera.id == transaccion.billetera_destino).first()
     billetera_origen.saldo_retenido -= escrow.monto_retenido
 
     transaccion.estado = "cancelada"
     escrow.estado = "cancelado"
     db.commit()
+
+    enviar_notificacion(
+        db, billetera_destino.usuario_id,
+        "Escrow cancelado",
+        f"{usuario.nombre} canceló el escrow de S/ {float(escrow.monto_retenido):.2f}",
+    )
 
     return {
         "mensaje": "Escrow cancelado y fondos liberados al remitente",

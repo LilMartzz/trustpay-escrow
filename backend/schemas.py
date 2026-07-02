@@ -5,6 +5,9 @@ class SyncUsuarioRequest(BaseModel):
     nombre: str
     telefono: str | None = None
 
+class FcmTokenRequest(BaseModel):
+    token: str
+
 class UsuarioResponse(BaseModel):
     id: UUID
     nombre: str

@@ -4,6 +4,7 @@ from pydantic import BaseModel, field_validator
 from database import get_db
 from models import Billetera, Transaccion, Escrow, Mensaje, Usuario
 from dependencies import get_usuario_actual
+from notificaciones import enviar_notificacion
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -41,7 +42,7 @@ def enviar_mensaje(
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    _verificar_participante(escrow_id, usuario, db)
+    escrow = _verificar_participante(escrow_id, usuario, db)
 
     mensaje = Mensaje(
         escrow_id=escrow_id,
@@ -50,6 +51,20 @@ def enviar_mensaje(
     )
     db.add(mensaje)
     db.commit()
+
+    transaccion = db.query(Transaccion).filter(Transaccion.id == escrow.transaccion_id).first()
+    billetera_remitente = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
+    otra_billetera_id = (
+        transaccion.billetera_destino
+        if str(billetera_remitente.id) == str(transaccion.billetera_origen)
+        else transaccion.billetera_origen
+    )
+    otra_billetera = db.query(Billetera).filter(Billetera.id == otra_billetera_id).first()
+    enviar_notificacion(
+        db, otra_billetera.usuario_id,
+        f"Nuevo mensaje de {usuario.nombre}",
+        data.contenido[:100],
+    )
 
     return {
         "id": str(mensaje.id),

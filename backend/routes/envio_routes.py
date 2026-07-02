@@ -4,6 +4,7 @@ from pydantic import BaseModel, field_validator
 from database import get_db
 from models import Billetera, Transaccion, Escrow, Envio
 from dependencies import get_usuario_actual
+from notificaciones import enviar_notificacion
 
 router = APIRouter(prefix="/envio", tags=["envio"])
 
@@ -77,6 +78,14 @@ def registrar_envio(
         db.add(envio)
 
     db.commit()
+
+    billetera_comprador = db.query(Billetera).filter(Billetera.id == transaccion.billetera_origen).first()
+    enviar_notificacion(
+        db, billetera_comprador.usuario_id,
+        "Tu pedido fue enviado",
+        f"{usuario.nombre} despachó tu pedido con {envio.empresa} — guía {envio.numero_guia}",
+    )
+
     return {
         "mensaje": "Envío registrado correctamente",
         "empresa": envio.empresa,

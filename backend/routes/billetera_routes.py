@@ -4,6 +4,7 @@ from database import get_db
 from models import Billetera, Transaccion, Usuario
 from dependencies import get_usuario_actual
 from decimal import Decimal
+from culqi_client import crear_cargo
 
 router = APIRouter(prefix="/billetera", tags=["billetera"])
 
@@ -22,14 +23,33 @@ def ver_saldo(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)
 @router.post("/depositar")
 def depositar(
     monto: float,
+    culqi_token: str,
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
     if monto <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+
+    cargo = crear_cargo(culqi_token, monto, usuario.email)
+    if not cargo["exitoso"]:
+        if cargo["mensaje"] == "Culqi no está configurado":
+            raise HTTPException(status_code=503, detail=cargo["mensaje"])
+        raise HTTPException(status_code=400, detail=cargo["mensaje"])
+
     billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
     billetera.saldo += Decimal(str(monto))
+
+    transaccion = Transaccion(
+        billetera_origen=None,
+        billetera_destino=billetera.id,
+        monto=monto,
+        tipo="deposito_culqi",
+        estado="completada",
+        referencia_externa=cargo["id"],
+    )
+    db.add(transaccion)
     db.commit()
+
     return {"mensaje": f"Depósito de S/ {monto:.2f} exitoso", "saldo": float(billetera.saldo)}
 
 

@@ -6,6 +6,7 @@ from decimal import Decimal
 
 def procesar_escrows_vencidos(SessionLocal):
     from models import Escrow, Transaccion, Billetera
+    from notificaciones import enviar_notificacion
 
     db = SessionLocal()
     try:
@@ -15,6 +16,7 @@ def procesar_escrows_vencidos(SessionLocal):
             .all()
         )
 
+        notificar = []
         for escrow in vencidos:
             transaccion = db.query(Transaccion).filter(
                 Transaccion.id == escrow.transaccion_id
@@ -40,9 +42,14 @@ def procesar_escrows_vencidos(SessionLocal):
             escrow.estado = "liberado"
             escrow.liberado_en = datetime.utcnow()
 
+            notificar.append((billetera_origen.usuario_id, billetera_destino.usuario_id, float(escrow.monto_retenido)))
+
         if vencidos:
             db.commit()
             print(f"[AutoRelease] {len(vencidos)} escrow(s) liberados automáticamente")
+            for comprador_id, vendedor_id, monto in notificar:
+                enviar_notificacion(db, comprador_id, "Escrow liberado automáticamente", f"Se confirmó el pago de S/ {monto:.2f} tras vencer el plazo")
+                enviar_notificacion(db, vendedor_id, "Pago recibido", f"Recibiste S/ {monto:.2f} — se liberó automáticamente al vencer el plazo")
 
     except Exception as e:
         db.rollback()

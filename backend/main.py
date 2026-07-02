@@ -16,6 +16,7 @@ from routes.evidencia_routes import router as evidencia_router
 from routes.perfil_routes import router as perfil_router
 from routes.envio_routes import router as envio_router
 from routes.chat_routes import router as chat_router
+from routes.calificacion_routes import router as calificacion_router
 from tasks import iniciar_scheduler
 
 init_firebase()
@@ -47,6 +48,7 @@ app.include_router(evidencia_router)
 app.include_router(perfil_router)
 app.include_router(envio_router)
 app.include_router(chat_router)
+app.include_router(calificacion_router)
 
 
 @app.get("/")

@@ -9,6 +9,7 @@ from models import Usuario
 from dependencies import get_usuario_actual
 from rekognition_client import comparar_rostros
 from schemas import FcmTokenRequest
+from routes.calificacion_routes import resumen_calificacion
 
 router = APIRouter(prefix="/perfil", tags=["perfil"])
 UPLOAD_DIR = "uploads"
@@ -43,13 +44,14 @@ def buscar_usuarios(
             "email": u.email,
             "verificado": u.verificado,
             "iniciales": u.nombre[:2].upper(),
+            **resumen_calificacion(db, u.id),
         }
         for u in resultados
     ]
 
 
 @router.get("/")
-def ver_perfil(usuario=Depends(get_usuario_actual)):
+def ver_perfil(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)):
     return {
         "id": str(usuario.id),
         "nombre": usuario.nombre,
@@ -61,6 +63,7 @@ def ver_perfil(usuario=Depends(get_usuario_actual)):
         "dni_reverso_url": usuario.dni_reverso_url,
         "selfie_url": usuario.selfie_url,
         "creado_en": str(usuario.creado_en),
+        **resumen_calificacion(db, usuario.id),
     }
 
 

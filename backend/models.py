@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, Boolean, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from database import Base
@@ -88,3 +88,14 @@ class Mensaje(Base):
     remitente_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
     contenido = Column(String, nullable=False)
     creado_en = Column(DateTime, default=datetime.utcnow)
+
+
+class Calificacion(Base):
+    __tablename__ = "calificaciones"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"))
+    calificador_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    calificado_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    puntuacion = Column(Integer, nullable=False)
+    comentario = Column(String, nullable=True)
+    creado_en = Column(DateTime, server_default=func.now())

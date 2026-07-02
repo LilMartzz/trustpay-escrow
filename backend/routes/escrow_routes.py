@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
-from models import Billetera, Transaccion, Escrow, Usuario
+from models import Billetera, Transaccion, Escrow, Usuario, Calificacion
 from dependencies import get_usuario_actual
 from tasks import procesar_escrows_vencidos
 from notificaciones import enviar_notificacion
@@ -179,6 +179,13 @@ def estado_escrow(
     otra_billetera = db.query(Billetera).filter(Billetera.id == otra_billetera_id).first()
     contraparte = db.query(Usuario).filter(Usuario.id == otra_billetera.usuario_id).first()
 
+    ya_calificado = (
+        db.query(Calificacion)
+        .filter(Calificacion.escrow_id == escrow_id, Calificacion.calificador_id == usuario.id)
+        .first()
+        is not None
+    )
+
     return {
         "escrow_id": str(escrow.id),
         "monto_retenido": float(escrow.monto_retenido),
@@ -188,7 +195,9 @@ def estado_escrow(
         "liberado_en": str(escrow.liberado_en) if escrow.liberado_en else None,
         "rol": "comprador" if es_comprador else "vendedor",
         "contraparte": contraparte.nombre if contraparte else None,
+        "contraparte_id": str(contraparte.id) if contraparte else None,
         "contraparte_email": contraparte.email if contraparte else None,
+        "ya_calificado": ya_calificado,
     }
 
 

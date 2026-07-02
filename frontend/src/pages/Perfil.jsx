@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Mail, Phone, Shield, CheckCircle2,
-  Clock, Upload, Camera, BadgeCheck, AlertCircle,
+  Clock, Upload, Camera, BadgeCheck, AlertCircle, Star,
 } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
@@ -157,6 +157,12 @@ export default function Perfil() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px' }}>{perfil.nombre}</div>
                     <div style={{ fontSize: '12.5px', color: 'var(--text3)' }}>{perfil.email}</div>
+                    {perfil.calificacion_cantidad > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '12px', color: 'var(--text2)' }}>
+                        <Star size={12} color="var(--amber)" fill="var(--amber)" />
+                        {perfil.calificacion_promedio} ({perfil.calificacion_cantidad})
+                      </div>
+                    )}
                   </div>
                   {ev && (
                     <div style={{

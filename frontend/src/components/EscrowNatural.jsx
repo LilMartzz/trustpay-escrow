@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { BadgeCheck, Search, Loader2 } from 'lucide-react'
+import { BadgeCheck, Search, Loader2, Star } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import api from '../services/api'
 
@@ -104,6 +104,13 @@ function Dropdown({ sugerencias, onSelect, visible, isDark }) {
               {u.email}
             </div>
           </div>
+
+          {u.calificacion_cantidad > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: textSecondary, flexShrink: 0 }}>
+              <Star size={12} color="#F59E0B" fill="#F59E0B" />
+              {u.calificacion_promedio}
+            </div>
+          )}
 
           {u.verificado === 'verificado' && (
             <BadgeCheck size={15} color={textSecondary} />

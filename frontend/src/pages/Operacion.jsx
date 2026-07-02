@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ShieldCheck, Truck, MessageSquare,
   CheckCircle2, Circle, Send, ExternalLink, Paperclip,
-  Link2, Package, ChevronRight,
+  Link2, Package, ChevronRight, Star,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -78,6 +78,10 @@ export default function Operacion() {
   const [chatInput, setChatInput] = useState('')
   const [tab, setTab]             = useState('evidencia')
 
+  const [puntuacion,  setPuntuacion]  = useState(0)
+  const [comentario,  setComentario]  = useState('')
+  const [calificando, setCalificando] = useState(false)
+
   const [msg,   setMsg]   = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -147,6 +151,19 @@ export default function Operacion() {
       flash(e.response?.data?.detail || 'Error al cancelar', true)
     }
     setLoading(false)
+  }
+
+  const calificar = async () => {
+    if (puntuacion < 1) { flash('Selecciona una puntuación', true); return }
+    setCalificando(true)
+    try {
+      await api.post(`/calificacion/${escrowId}`, { puntuacion, comentario: comentario || null })
+      flash('¡Gracias por tu calificación!')
+      cargarDatos()
+    } catch (e) {
+      flash(e.response?.data?.detail || 'Error al calificar', true)
+    }
+    setCalificando(false)
   }
 
   const subirLink = async (e) => {
@@ -340,6 +357,51 @@ export default function Operacion() {
                         }}>
                           Esperando confirmación del comprador
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Calificación */}
+                  {escrow.estado === 'liberado' && (
+                    <div style={{ marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>
+                      {escrow.ya_calificado ? (
+                        <div style={{ textAlign: 'center', padding: '4px 0', fontSize: '12.5px', color: 'var(--text2)' }}>
+                          <Star size={18} color="var(--amber)" fill="var(--amber)" style={{ marginBottom: '6px' }} />
+                          <p>Ya calificaste esta operación. ¡Gracias!</p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="label" style={{ marginBottom: '10px' }}>
+                            Califica a {escrow.contraparte || 'la contraparte'}
+                          </p>
+                          <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setPuntuacion(n)}
+                                className="btn-ghost"
+                                style={{ padding: '4px' }}
+                              >
+                                <Star
+                                  size={22}
+                                  color="var(--amber)"
+                                  fill={n <= puntuacion ? 'var(--amber)' : 'none'}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            placeholder="Comentario (opcional)"
+                            value={comentario}
+                            onChange={e => setComentario(e.target.value)}
+                            rows={2}
+                            style={{ marginBottom: '10px', resize: 'none' }}
+                          />
+                          <button onClick={calificar} disabled={calificando} className="btn-primary">
+                            {calificando ? 'Enviando...' : 'Enviar calificación'}
+                          </button>
+                        </>
                       )}
                     </div>
                   )}

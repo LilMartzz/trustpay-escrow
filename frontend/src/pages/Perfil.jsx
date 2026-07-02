@@ -7,6 +7,36 @@ import {
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 
+function DocDropzone({ label, file, onPick, Icon }) {
+  const inputRef = useRef()
+  return (
+    <div>
+      <div className="label" style={{ marginBottom: '8px' }}>{label}</div>
+      <div
+        onClick={() => inputRef.current.click()}
+        style={{
+          background: file ? 'var(--green-bg)' : 'var(--surface2)',
+          border: `1px dashed ${file ? 'var(--green)' : 'var(--border2)'}`,
+          borderRadius: 'var(--radius)',
+          padding: '22px 12px',
+          textAlign: 'center',
+          cursor: 'pointer',
+          transition: 'border-color 0.2s, background 0.2s',
+        }}
+      >
+        {file
+          ? <CheckCircle2 size={24} color="var(--green)" style={{ margin: '0 auto 8px' }} />
+          : <Icon size={22} color="var(--text3)" style={{ margin: '0 auto 8px' }} />
+        }
+        <div style={{ fontSize: '11.5px', color: file ? 'var(--green)' : 'var(--text3)' }}>
+          {file ? file.name.substring(0, 20) + (file.name.length > 20 ? '…' : '') : 'Clic para subir'}
+        </div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" onChange={e => onPick(e.target.files[0])} style={{ display: 'none' }} />
+    </div>
+  )
+}
+
 const ESTADO_VERIF = {
   no_verificado: { label: 'No verificado', color: 'var(--red)',   bg: 'rgba(248,113,113,0.1)', icon: AlertCircle },
   pendiente:     { label: 'En revisión',   color: 'var(--amber)', bg: 'var(--amber-bg)',       icon: Clock },
@@ -18,7 +48,8 @@ export default function Perfil() {
   const [nombre,      setNombre]      = useState('')
   const [telefono,    setTelefono]    = useState('')
   const [dniNumero,   setDniNumero]   = useState('')
-  const [dniFile,     setDniFile]     = useState(null)
+  const [dniFrontalFile, setDniFrontalFile] = useState(null)
+  const [dniReversoFile, setDniReversoFile] = useState(null)
   const [selfieFile,  setSelfieFile]  = useState(null)
   const [dniValido,   setDniValido]   = useState(null)
   const [msg,   setMsg]   = useState('')
@@ -26,8 +57,6 @@ export default function Perfil() {
   const [loading,       setLoading]       = useState(false)
   const [validandoDni,  setValidandoDni]  = useState(false)
   const navigate   = useNavigate()
-  const dniRef     = useRef()
-  const selfieRef  = useRef()
 
   useEffect(() => { cargar() }, [])
 
@@ -72,15 +101,16 @@ export default function Perfil() {
 
   const verificar = async (e) => {
     e.preventDefault()
-    if (!dniFile || !selfieFile) { flash('Debes subir ambas imágenes', true); return }
+    if (!dniFrontalFile || !dniReversoFile || !selfieFile) { flash('Debes subir las 3 imágenes', true); return }
     setLoading(true)
     try {
       const fd = new FormData()
-      fd.append('dni', dniFile)
+      fd.append('dni_frontal', dniFrontalFile)
+      fd.append('dni_reverso', dniReversoFile)
       fd.append('selfie', selfieFile)
-      await api.post('/perfil/verificar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      flash('Documentos recibidos. Tu identidad será verificada en breve.')
-      setDniFile(null); setSelfieFile(null)
+      const res = await api.post('/perfil/verificar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      flash(res.data.mensaje)
+      setDniFrontalFile(null); setDniReversoFile(null); setSelfieFile(null)
       cargar()
     } catch (e) { flash(e.response?.data?.detail || 'Error al enviar documentos', true) }
     setLoading(false)
@@ -265,71 +295,22 @@ export default function Perfil() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                     <div style={{
                       width: '22px', height: '22px', borderRadius: '50%',
-                      background: (dniFile && selfieFile) ? 'var(--green-bg)' : 'var(--surface2)',
-                      border: `1px solid ${(dniFile && selfieFile) ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                      background: (dniFrontalFile && dniReversoFile && selfieFile) ? 'var(--green-bg)' : 'var(--surface2)',
+                      border: `1px solid ${(dniFrontalFile && dniReversoFile && selfieFile) ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '10px', fontWeight: 700,
-                      color: (dniFile && selfieFile) ? 'var(--green)' : 'var(--text3)',
+                      color: (dniFrontalFile && dniReversoFile && selfieFile) ? 'var(--green)' : 'var(--text3)',
                     }}>
-                      {(dniFile && selfieFile) ? <CheckCircle2 size={12} /> : '2'}
+                      {(dniFrontalFile && dniReversoFile && selfieFile) ? <CheckCircle2 size={12} /> : '2'}
                     </div>
                     <span style={{ fontSize: '13px', fontWeight: 500 }}>Documentos fotográficos</span>
                   </div>
 
                   <form onSubmit={verificar}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }} className="grid-1-mobile">
-                      {/* DNI photo */}
-                      <div>
-                        <div className="label" style={{ marginBottom: '8px' }}>Foto del DNI</div>
-                        <div
-                          onClick={() => dniRef.current.click()}
-                          style={{
-                            background: 'var(--surface2)',
-                            border: `1px dashed ${dniFile ? 'var(--green)' : 'var(--border2)'}`,
-                            borderRadius: 'var(--radius)',
-                            padding: '22px 12px',
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'border-color 0.2s, background 0.2s',
-                            background: dniFile ? 'var(--green-bg)' : 'var(--surface2)',
-                          }}
-                        >
-                          {dniFile
-                            ? <CheckCircle2 size={24} color="var(--green)" style={{ margin: '0 auto 8px' }} />
-                            : <Upload size={22} color="var(--text3)" style={{ margin: '0 auto 8px' }} />
-                          }
-                          <div style={{ fontSize: '11.5px', color: dniFile ? 'var(--green)' : 'var(--text3)' }}>
-                            {dniFile ? dniFile.name.substring(0, 20) + (dniFile.name.length > 20 ? '…' : '') : 'Clic para subir'}
-                          </div>
-                        </div>
-                        <input ref={dniRef} type="file" accept="image/*" onChange={e => setDniFile(e.target.files[0])} style={{ display: 'none' }} />
-                      </div>
-
-                      {/* Selfie */}
-                      <div>
-                        <div className="label" style={{ marginBottom: '8px' }}>Selfie con DNI</div>
-                        <div
-                          onClick={() => selfieRef.current.click()}
-                          style={{
-                            background: selfieFile ? 'var(--green-bg)' : 'var(--surface2)',
-                            border: `1px dashed ${selfieFile ? 'var(--green)' : 'var(--border2)'}`,
-                            borderRadius: 'var(--radius)',
-                            padding: '22px 12px',
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'border-color 0.2s, background 0.2s',
-                          }}
-                        >
-                          {selfieFile
-                            ? <CheckCircle2 size={24} color="var(--green)" style={{ margin: '0 auto 8px' }} />
-                            : <Camera size={22} color="var(--text3)" style={{ margin: '0 auto 8px' }} />
-                          }
-                          <div style={{ fontSize: '11.5px', color: selfieFile ? 'var(--green)' : 'var(--text3)' }}>
-                            {selfieFile ? selfieFile.name.substring(0, 20) + (selfieFile.name.length > 20 ? '…' : '') : 'Clic para subir'}
-                          </div>
-                        </div>
-                        <input ref={selfieRef} type="file" accept="image/*" onChange={e => setSelfieFile(e.target.files[0])} style={{ display: 'none' }} />
-                      </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }} className="grid-1-mobile">
+                      <DocDropzone label="DNI - Anverso" file={dniFrontalFile} onPick={setDniFrontalFile} Icon={Upload} />
+                      <DocDropzone label="DNI - Reverso" file={dniReversoFile} onPick={setDniReversoFile} Icon={Upload} />
+                      <DocDropzone label="Selfie con DNI" file={selfieFile} onPick={setSelfieFile} Icon={Camera} />
                     </div>
 
                     <div className="alert alert-warning" style={{ marginBottom: '14px', fontSize: '11.5px' }}>

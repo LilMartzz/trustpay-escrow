@@ -17,7 +17,8 @@ class Usuario(Base):
     creado_en = Column(DateTime, server_default=func.now())
     # no_verificado | pendiente | verificado
     verificado = Column(String, default="no_verificado")
-    dni_url = Column(String, nullable=True)
+    dni_frontal_url = Column(String, nullable=True)
+    dni_reverso_url = Column(String, nullable=True)
     selfie_url = Column(String, nullable=True)
     dni_numero = Column(String(8), nullable=True)
 

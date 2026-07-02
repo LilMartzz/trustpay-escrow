@@ -1,13 +1,13 @@
 import uuid
 import os
 import re
-import shutil
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Usuario
 from dependencies import get_usuario_actual
+from rekognition_client import comparar_rostros
 
 router = APIRouter(prefix="/perfil", tags=["perfil"])
 UPLOAD_DIR = "uploads"
@@ -56,7 +56,8 @@ def ver_perfil(usuario=Depends(get_usuario_actual)):
         "telefono": usuario.telefono,
         "verificado": usuario.verificado,
         "dni_numero": usuario.dni_numero,
-        "dni_url": usuario.dni_url,
+        "dni_frontal_url": usuario.dni_frontal_url,
+        "dni_reverso_url": usuario.dni_reverso_url,
         "selfie_url": usuario.selfie_url,
         "creado_en": str(usuario.creado_en),
     }
@@ -92,25 +93,27 @@ def validar_dni(
 
     resultado = {"valido": True, "numero_dni": numero_dni, "verificado_reniec": False}
 
-    api_key = os.getenv("RENIEC_API_KEY", "")
+    api_key = os.getenv("APIPERU_API_KEY", "")
     if api_key:
         try:
             import httpx
 
             resp = httpx.get(
-                f"https://api.apis.net.pe/v2/dni?numero={numero_dni}",
-                headers={"Authorization": f"Bearer {api_key}"},
+                f"https://apiperu.dev/api/dni/{numero_dni}",
+                params={"api_token": api_key},
                 timeout=8,
             )
             if resp.status_code == 200:
-                data = resp.json()
-                nombre_reniec = (
-                    f"{data.get('nombres', '')} "
-                    f"{data.get('apellidoPaterno', '')} "
-                    f"{data.get('apellidoMaterno', '')}"
-                ).strip()
-                resultado["verificado_reniec"] = True
-                resultado["nombre_reniec"] = nombre_reniec
+                body = resp.json()
+                if body.get("success"):
+                    data = body.get("data", {})
+                    nombre_reniec = (
+                        f"{data.get('nombres', '')} "
+                        f"{data.get('apellido_paterno', '')} "
+                        f"{data.get('apellido_materno', '')}"
+                    ).strip()
+                    resultado["verificado_reniec"] = True
+                    resultado["nombre_reniec"] = nombre_reniec
         except Exception:
             pass
 
@@ -122,7 +125,8 @@ def validar_dni(
 
 @router.post("/verificar")
 def verificar_identidad(
-    dni: UploadFile = File(...),
+    dni_frontal: UploadFile = File(...),
+    dni_reverso: UploadFile = File(...),
     selfie: UploadFile = File(...),
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
@@ -134,18 +138,31 @@ def verificar_identidad(
         ext = archivo.filename.rsplit(".", 1)[-1].lower()
         if ext not in {"jpg", "jpeg", "png", "webp"}:
             raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG o PNG")
+        contenido = archivo.file.read()
         nombre = f"{prefijo}_{uuid.uuid4()}.{ext}"
         ruta = os.path.join(UPLOAD_DIR, nombre)
         with open(ruta, "wb") as f:
-            shutil.copyfileobj(archivo.file, f)
-        return f"/uploads/{nombre}"
+            f.write(contenido)
+        return f"/uploads/{nombre}", contenido
 
-    usuario.dni_url = guardar(dni, "dni")
-    usuario.selfie_url = guardar(selfie, "selfie")
-    usuario.verificado = "pendiente"
+    dni_frontal_url, dni_frontal_bytes = guardar(dni_frontal, "dni_frontal")
+    dni_reverso_url, _ = guardar(dni_reverso, "dni_reverso")
+    selfie_url, selfie_bytes = guardar(selfie, "selfie")
+
+    coincide, similitud = comparar_rostros(selfie_bytes, dni_frontal_bytes)
+
+    usuario.dni_frontal_url = dni_frontal_url
+    usuario.dni_reverso_url = dni_reverso_url
+    usuario.selfie_url = selfie_url
+    usuario.verificado = "verificado" if coincide else "pendiente"
     db.commit()
 
     return {
-        "mensaje": "Documentos recibidos. Tu identidad será verificada en breve.",
+        "mensaje": (
+            "¡Identidad verificada automáticamente!"
+            if coincide
+            else "Documentos recibidos. Tu identidad será verificada en breve."
+        ),
         "verificado": usuario.verificado,
+        "similitud": similitud,
     }

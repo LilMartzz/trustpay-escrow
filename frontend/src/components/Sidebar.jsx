@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
+import { useAuth } from '../contexts/AuthContext'
 import {
   LayoutDashboard, Package, User, LogOut,
   ChevronLeft, ChevronRight, Sun, Moon, Shield, Menu,
@@ -18,9 +19,10 @@ export default function Sidebar() {
   const navigate   = useNavigate()
   const { pathname } = useLocation()
   const { theme, toggle } = useTheme()
+  const { logout: signOut } = useAuth()
 
   const nav = (path) => { navigate(path); setMobileOpen(false) }
-  const logout = () => { localStorage.removeItem('token'); navigate('/login') }
+  const logout = () => { signOut(); navigate('/login') }
 
   const sidebarStyle = {
     background: 'var(--surface)',

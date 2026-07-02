@@ -1,8 +1,13 @@
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, SessionLocal
+from firebase_config import init_firebase
 import models
 from routes.auth_routes import router as auth_router
 from routes.billetera_routes import router as billetera_router
@@ -13,6 +18,7 @@ from routes.envio_routes import router as envio_router
 from routes.chat_routes import router as chat_router
 from tasks import iniciar_scheduler
 
+init_firebase()
 Base.metadata.create_all(bind=engine)
 
 

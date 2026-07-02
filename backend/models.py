@@ -9,9 +9,10 @@ from database import Base
 class Usuario(Base):
     __tablename__ = "usuarios"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    firebase_uid = Column(String, unique=True, nullable=False)
     nombre = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
-    password_hash = Column(String, nullable=False)
+    email_verificado = Column(Boolean, default=False)
     telefono = Column(String)
     creado_en = Column(DateTime, server_default=func.now())
     # no_verificado | pendiente | verificado

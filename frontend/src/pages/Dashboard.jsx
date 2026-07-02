@@ -7,6 +7,7 @@ import {
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 import EscrowNatural from '../components/EscrowNatural'
+import { useAuth } from '../contexts/AuthContext'
 
 /* ── Count-up animation hook ── */
 function useCountUp(target, duration = 750) {
@@ -95,6 +96,7 @@ export default function Dashboard() {
 
   const navigate = useNavigate()
   const location = useLocation()
+  const { logout } = useAuth()
 
   useEffect(() => {
     cargar()
@@ -113,7 +115,7 @@ export default function Dashboard() {
       setUsuario(s.data.usuario)
       setHistorial(h.data)
     } catch {
-      localStorage.removeItem('token')
+      logout()
       navigate('/login')
     }
   }

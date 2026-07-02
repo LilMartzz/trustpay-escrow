@@ -5,6 +5,7 @@ import {
   Zap, BadgeCheck, Sun, Moon, ArrowRight, ChevronRight,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
+import { useAuth } from '../contexts/AuthContext'
 
 /* ─────────────────────────────────────────────────────
    1. SCROLL REVEAL — IntersectionObserver, fires once
@@ -74,7 +75,7 @@ const STEPS = [
 ───────────────────────────────────────────────────── */
 export default function Landing() {
   const navigate   = useNavigate()
-  const token      = localStorage.getItem('token')
+  const { user: token } = useAuth()
   const { theme, toggle } = useTheme()
 
   /* Reveal refs per section */

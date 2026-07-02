@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Shield, Mail, Lock, User, Phone, ArrowRight, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
-import api from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Register() {
   const [form, setForm]   = useState({ nombre: '', email: '', password: '', telefono: '' })
@@ -10,15 +10,15 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
+  const { register } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const res = await api.post('/auth/registro', form)
-      localStorage.setItem('token', res.data.access_token)
-      navigate('/dashboard')
+      await register(form.nombre, form.email, form.password, form.telefono)
+      navigate('/verificar-correo')
     } catch {
       setError('Error al registrarse. El email puede estar en uso.')
     }

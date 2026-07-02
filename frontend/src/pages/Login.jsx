@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Shield, Mail, Lock, ArrowRight, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
-import api from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
   const [form, setForm]   = useState({ email: '', password: '' })
@@ -10,15 +10,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
+  const { login } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const res = await api.post('/auth/login', form)
-      localStorage.setItem('token', res.data.access_token)
-      navigate('/dashboard')
+      const user = await login(form.email, form.password)
+      navigate(user.emailVerified ? '/dashboard' : '/verificar-correo')
     } catch {
       setError('Email o contraseña incorrectos')
     }

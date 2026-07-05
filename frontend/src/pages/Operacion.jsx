@@ -1,11 +1,55 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShieldCheck, Truck, MessageSquare,
   CheckCircle2, Circle, Send, ExternalLink, Paperclip,
   Link2, Package, ChevronRight, Star,
 } from 'lucide-react'
 import api from '../services/api'
+import { useToast } from '../components/ToastProvider'
+import HoldButton from '../components/HoldButton'
+
+/* ── Check SVG que se "dibuja" al completarse un paso ── */
+function CheckAnimado({ done }) {
+  if (!done) return <Circle size={15} color="var(--border2)" style={{ flexShrink: 0 }} />
+  return (
+    <motion.svg
+      width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="var(--green)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      initial={{ scale: 0.6, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      <motion.circle
+        cx="12" cy="12" r="10"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+      />
+      <motion.path
+        d="M8 12.5l2.6 2.6L16.5 9.5"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 0.3, delay: 0.3, ease: 'easeOut' }}
+      />
+    </motion.svg>
+  )
+}
+
+/* ── Conector vertical que se "llena" de verde ── */
+function Conector({ done, left }) {
+  return (
+    <div style={{ width: '1.5px', height: '12px', background: 'var(--border)', marginLeft: left, position: 'relative', overflow: 'hidden' }}>
+      <motion.div
+        initial={false}
+        animate={{ scaleY: done ? 1 : 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(34,197,94,0.45)', transformOrigin: 'top' }}
+      />
+    </div>
+  )
+}
+
 
 /* ── constants ── */
 const ESTADO_MAP = {
@@ -82,10 +126,9 @@ export default function Operacion() {
   const [comentario,  setComentario]  = useState('')
   const [calificando, setCalificando] = useState(false)
 
-  const [msg,   setMsg]   = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const toast = useToast()
   const chatRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -96,7 +139,7 @@ export default function Operacion() {
   }, [])
 
   useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight
+    if (chatRef.current) chatRef.current.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
   }, [mensajes])
 
   const cargarDatos = async () => {
@@ -124,8 +167,7 @@ export default function Operacion() {
   }
 
   const flash = (m, isError = false) => {
-    if (isError) setError(m); else setMsg(m)
-    setTimeout(() => { setMsg(''); setError('') }, 3500)
+    if (isError) toast.error(m); else toast.success(m)
   }
 
   const confirmar = async () => {
@@ -238,7 +280,7 @@ export default function Operacion() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '24px', animation: 'fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '24px' }}>
       <div style={{ maxWidth: '1020px', margin: '0 auto' }}>
 
         {/* ── Header ── */}
@@ -277,10 +319,6 @@ export default function Operacion() {
           </div>
         </div>
 
-        {/* ── Alerts ── */}
-        {msg   && <div className="alert alert-success">{msg}</div>}
-        {error && <div className="alert alert-error">{error}</div>}
-
         {/* ── Two-column layout ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }} className="grid-1-mobile">
 
@@ -313,12 +351,14 @@ export default function Operacion() {
                   {/* Progress steps */}
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {pasos.map((paso, i) => (
-                      <div key={i}>
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                      >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          {paso.done
-                            ? <CheckCircle2 size={15} color="var(--green)" style={{ flexShrink: 0 }} />
-                            : <Circle size={15} color="var(--border2)" style={{ flexShrink: 0 }} />
-                          }
+                          <CheckAnimado done={paso.done} />
                           <span style={{
                             fontSize: '12.5px',
                             color: paso.done ? 'var(--text)' : 'var(--text3)',
@@ -327,10 +367,8 @@ export default function Operacion() {
                             {paso.label}
                           </span>
                         </div>
-                        {i < pasos.length - 1 && (
-                          <div style={{ width: '1px', height: '12px', background: paso.done ? 'rgba(34,197,94,0.3)' : 'var(--border)', marginLeft: '7px' }} />
-                        )}
-                      </div>
+                        {i < pasos.length - 1 && <Conector done={paso.done} left="7px" />}
+                      </motion.div>
                     ))}
                   </div>
 
@@ -342,9 +380,13 @@ export default function Operacion() {
                       </div>
                       {esComprador && (
                         <>
-                          <button onClick={confirmar} disabled={loading} className="btn-primary">
-                            {loading ? 'Procesando...' : <><CheckCircle2 size={14} /> Confirmar que recibí el producto</>}
-                          </button>
+                          <HoldButton onComplete={confirmar} disabled={loading}>
+                            <CheckCircle2 size={14} />
+                            {loading ? 'Procesando...' : 'Mantén presionado para confirmar recepción'}
+                          </HoldButton>
+                          <p style={{ fontSize: '10.5px', color: 'var(--text3)', textAlign: 'center', margin: '-2px 0 0' }}>
+                            Liberar los fondos es irreversible — mantén presionado 1.5 s
+                          </p>
                           <button onClick={cancelar} disabled={loading} className="btn-danger">
                             Cancelar y devolver fondos
                           </button>
@@ -441,13 +483,22 @@ export default function Operacion() {
                   const done    = trackingDone(envio?.estado, escrow?.estado, step.key)
                   const current = envio?.estado === step.key && escrow?.estado !== 'liberado'
                   return (
-                    <div key={i}>
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{
-                          width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
-                          background: done ? 'var(--green)' : current ? 'var(--amber)' : 'var(--border2)',
-                          animation: current ? 'pulse-ring 1.6s ease-out infinite' : 'none',
-                        }} />
+                        <motion.div
+                          initial={false}
+                          animate={{ scale: done || current ? [1, 1.35, 1] : 1 }}
+                          transition={{ duration: 0.35 }}
+                          style={{
+                            width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
+                            background: done ? 'var(--green)' : current ? 'var(--amber)' : 'var(--border2)',
+                            animation: current ? 'pulse-ring 1.6s ease-out infinite' : 'none',
+                          }} />
                         <span style={{
                           fontSize: '12.5px',
                           color: done ? 'var(--text)' : current ? 'var(--amber)' : 'var(--text3)',
@@ -462,10 +513,8 @@ export default function Operacion() {
                           )}
                         </span>
                       </div>
-                      {i < TRACKING_ESTADOS.length - 1 && (
-                        <div style={{ width: '1px', height: '12px', background: done ? 'rgba(34,197,94,0.3)' : 'var(--border)', marginLeft: '4.5px' }} />
-                      )}
-                    </div>
+                      {i < TRACKING_ESTADOS.length - 1 && <Conector done={done} left="4.5px" />}
+                    </motion.div>
                   )
                 })}
               </div>
@@ -652,19 +701,28 @@ export default function Operacion() {
                     <p>No hay mensajes aún</p>
                   </div>
                 ) : (
-                  mensajes.map(m => (
-                    <div key={m.id} style={{
-                      display: 'flex', flexDirection: 'column',
-                      alignItems: m.es_propio ? 'flex-end' : 'flex-start',
-                    }}>
-                      <div className={`chat-bubble ${m.es_propio ? 'own' : 'other'}`}>
-                        {m.contenido}
-                      </div>
-                      <div style={{ fontSize: '9.5px', color: 'var(--text3)', marginTop: '3px', padding: '0 4px' }}>
-                        {m.remitente_nombre} · {new Date(m.creado_en).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  ))
+                  <AnimatePresence initial={false}>
+                    {mensajes.map(m => (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                        style={{
+                          display: 'flex', flexDirection: 'column', flexShrink: 0,
+                          alignItems: m.es_propio ? 'flex-end' : 'flex-start',
+                          transformOrigin: m.es_propio ? 'bottom right' : 'bottom left',
+                        }}
+                      >
+                        <div className={`chat-bubble ${m.es_propio ? 'own' : 'other'}`}>
+                          {m.contenido}
+                        </div>
+                        <div style={{ fontSize: '9.5px', color: 'var(--text3)', marginTop: '3px', padding: '0 4px' }}>
+                          {m.remitente_nombre} · {new Date(m.creado_en).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 )}
               </div>
 

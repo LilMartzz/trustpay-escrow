@@ -250,8 +250,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important;
   border-radius: var(--radius-sm);
 }
 
-/* ── PAGE ENTER ── */
-.main-content { animation: fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both; }
+/* ── PAGE ENTER ── (la transición de ruta con framer-motion se encarga ahora) */
 
 /* ── OPERATION CARD HOVER ── */
 .op-card {
@@ -622,6 +621,56 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important;
 
 /* ── STAGGER (entrada escalonada de campos) ── */
 .stagger { animation: fadeUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* ── SALDO PULSO (cuando el saldo sube) ── */
+@keyframes saldoPulso {
+  0%   { transform: scale(1); }
+  25%  { transform: scale(1.045); color: var(--green); text-shadow: 0 0 26px var(--green-glow); }
+  100% { transform: scale(1); }
+}
+.saldo-pulso { animation: saldoPulso 1.25s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* ── TOOLTIP DE LA BARRA DISPONIBLE/RETENIDO ── */
+.barra-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  z-index: 10;
+  animation: fadeUp 0.18s ease both;
+  pointer-events: none;
+}
+
+/* ── FILAS DEL HISTORIAL ── */
+.hist-row { transition: background 0.15s, transform 0.18s ease; }
+.hist-row:hover { background: var(--surface2); transform: translateX(4px); }
+.hist-icon { transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
+.hist-row:hover .hist-icon { transform: scale(1.15); }
+
+/* ── AVATAR HOVER (contrapartes) ── */
+.avatar-hover { cursor: default; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
+.avatar-hover:hover { transform: translateY(-3px) scale(1.06); }
+
+/* ── GRADIENT TEXT ANIMADO ── */
+.gradient-text-anim {
+  background: linear-gradient(120deg, var(--green), #06B6D4, #818CF8, var(--green));
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 7s linear infinite;
+}
+@keyframes gradientShift { to { background-position: 250% 0; } }
 
 /* ── RESPONSIVE UTILS ── */
 @media (max-width: 768px) {

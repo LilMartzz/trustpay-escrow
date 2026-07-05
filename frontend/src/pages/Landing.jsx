@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Shield, Lock, Package, MessageSquare, CreditCard,
@@ -6,44 +5,8 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
-
-/* ─────────────────────────────────────────────────────
-   1. SCROLL REVEAL — IntersectionObserver, fires once
-───────────────────────────────────────────────────── */
-function useReveal(threshold = 0.12) {
-  const ref = useRef(null)
-  const [on, setOn] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setOn(true); obs.unobserve(el) } },
-      { threshold }
-    )
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [threshold])
-  return [ref, on]
-}
-
-/* ─────────────────────────────────────────────────────
-   2. ANIMATED COUNTER — eased, starts when `go` = true
-───────────────────────────────────────────────────── */
-function useCounter(target, ms, go) {
-  const [v, setV] = useState(0)
-  useEffect(() => {
-    if (!go) return
-    const t0 = performance.now()
-    const tick = (now) => {
-      const p = Math.min((now - t0) / ms, 1)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setV(Math.round(eased * target))
-      if (p < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-  }, [go, target, ms])
-  return v
-}
+import useReveal from '../hooks/useInView'
+import useCounter from '../hooks/useCounter'
 
 /* Helper — inline transition */
 const fade = (on, delay = 0) => ({
@@ -173,7 +136,7 @@ export default function Landing() {
           animation: 'fadeUp 0.7s ease 0.1s both',
         }}>
           Compra y vende<br />
-          <span className="gradient-text">sin miedo</span>
+          <span className="gradient-text-anim">sin miedo</span>
         </h1>
 
         <p style={{

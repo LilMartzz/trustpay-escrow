@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import {
   Wallet, TrendingUp, Lock, ArrowUpRight, ArrowDownRight,
   RefreshCw, Plus, ChevronRight, Copy, Check,
@@ -8,32 +9,10 @@ import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 import EscrowNatural from '../components/EscrowNatural'
 import DepositoModal from '../components/DepositoModal'
+import { useToast } from '../components/ToastProvider'
+import useCountUp from '../hooks/useCountUp'
 import { useAuth } from '../contexts/AuthContext'
 import { activarNotificaciones } from '../notifications'
-
-/* ── Count-up animation hook ── */
-function useCountUp(target, duration = 750) {
-  const [display, setDisplay] = useState(0)
-  const animRef = useRef(null)
-  const fromRef = useRef(0)
-  useEffect(() => {
-    if (target === null || target === undefined) return
-    const from = fromRef.current
-    const diff = target - from
-    const start = performance.now()
-    cancelAnimationFrame(animRef.current)
-    const tick = (now) => {
-      const t = Math.min((now - start) / duration, 1)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setDisplay(from + diff * eased)
-      if (t < 1) animRef.current = requestAnimationFrame(tick)
-      else fromRef.current = target
-    }
-    animRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(animRef.current)
-  }, [target, duration])
-  return display
-}
 
 /* ── helpers historial ── */
 function labelH(t) {
@@ -91,15 +70,18 @@ export default function Dashboard() {
   const [historial, setHistorial] = useState([])
   const [usuario,  setUsuario]  = useState('')
   const [deposito, setDeposito] = useState('')
-  const [msg,   setMsg]   = useState('')
-  const [error, setError] = useState('')
   const [copied, setCopied]    = useState(false)
   const [mostrarDeposito, setMostrarDeposito] = useState(false)
   const [loadingEsc, setLoadingEsc] = useState(false)
+  const [saldoPulso, setSaldoPulso] = useState(false)
+  const [barraLista, setBarraLista] = useState(false)
+  const [hoverBarra, setHoverBarra] = useState(false)
 
   const navigate = useNavigate()
   const location = useLocation()
   const { logout } = useAuth()
+  const toast = useToast()
+  const saldoPrevRef = useRef(null)
 
   useEffect(() => {
     cargar()
@@ -124,11 +106,6 @@ export default function Dashboard() {
     }
   }
 
-  const flash = (m, isErr = false) => {
-    if (isErr) { setError(m); setMsg('') } else { setMsg(m); setError('') }
-    setTimeout(() => { setMsg(''); setError('') }, 3500)
-  }
-
   const abrirDeposito = (e) => {
     e.preventDefault()
     setMostrarDeposito(true)
@@ -137,7 +114,7 @@ export default function Dashboard() {
   const handleDepositoExitoso = async () => {
     setMostrarDeposito(false)
     setDeposito('')
-    flash('¡Depósito exitoso!')
+    toast.success('¡Depósito exitoso!')
     await cargar()
   }
 
@@ -149,7 +126,7 @@ export default function Dashboard() {
       await cargar()
       navigate(`/operacion/${res.data.escrow_id}`)
     } catch (err) {
-      flash(err.response?.data?.detail || 'Error al iniciar escrow', true)
+      toast.error(err.response?.data?.detail || 'Error al iniciar escrow')
     }
     setLoadingEsc(false)
   }
@@ -170,6 +147,23 @@ export default function Dashboard() {
   const animDisponible = useCountUp(saldo !== null ? saldoDisponible : null)
   const animRetenido   = useCountUp(saldo !== null ? saldoRetenido   : null)
 
+  /* pulso verde cuando el saldo sube (ej. tras una recarga) */
+  useEffect(() => {
+    if (saldo === null) return
+    const prev = saldoPrevRef.current
+    saldoPrevRef.current = saldoTotal
+    if (prev !== null && saldoTotal > prev) {
+      setSaldoPulso(true)
+      const t = setTimeout(() => setSaldoPulso(false), 1300)
+      return () => clearTimeout(t)
+    }
+  }, [saldoTotal, saldo])
+
+  /* la barra disponible/retenido crece de 0 a su valor al montar */
+  useEffect(() => {
+    if (saldo !== null) requestAnimationFrame(() => setBarraLista(true))
+  }, [saldo])
+
   /* ── barra de disponibilidad ── */
   const pctDisp = saldoTotal > 0 ? (saldoDisponible / saldoTotal) * 100 : 100
 
@@ -189,9 +183,6 @@ export default function Dashboard() {
           </div>
           <Avatar name={usuario} size={38} />
         </div>
-
-        {msg   && <div className="alert alert-success">{msg}</div>}
-        {error && <div className="alert alert-error">{error}</div>}
 
         {/* ══════════════════════════════════════
             ROW 1 — Saldo  |  Nueva operación
@@ -223,15 +214,31 @@ export default function Dashboard() {
             {/* Saldo principal */}
             <div style={{ marginBottom: '6px' }}>
               <p className="label" style={{ marginBottom: '4px' }}>Saldo total</p>
-              <p style={{ fontFamily: 'Syne', fontSize: '42px', fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1, color: 'var(--text)' }}>
+              <p className={saldoPulso ? 'saldo-pulso' : ''} style={{ fontFamily: 'Syne', fontSize: '42px', fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1, color: 'var(--text)', transformOrigin: 'left center' }}>
                 S/ {animTotal.toFixed(2)}
               </p>
             </div>
 
             {/* Barra disponible/retenido */}
             <div style={{ marginBottom: '18px' }}>
-              <div style={{ height: '5px', background: 'var(--surface2)', borderRadius: '99px', overflow: 'hidden', marginBottom: '8px' }}>
-                <div style={{ height: '100%', width: `${pctDisp}%`, background: 'var(--green)', borderRadius: '99px', transition: 'width 0.5s ease' }} />
+              <div
+                onMouseEnter={() => setHoverBarra(true)}
+                onMouseLeave={() => setHoverBarra(false)}
+                style={{ position: 'relative', padding: '4px 0', margin: '-4px 0 4px', cursor: 'default' }}
+              >
+                {hoverBarra && (
+                  <div className="barra-tooltip">
+                    <span style={{ color: 'var(--green)' }}>● S/ {saldoDisponible.toFixed(2)} disponible</span>
+                    <span style={{ color: 'var(--amber)' }}>● S/ {saldoRetenido.toFixed(2)} retenido</span>
+                  </div>
+                )}
+                <div style={{ height: '5px', background: 'var(--amber-bg)', borderRadius: '99px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: barraLista ? `${pctDisp}%` : '0%',
+                    background: 'var(--green)', borderRadius: '99px',
+                    transition: 'width 0.9s cubic-bezier(0.22,1,0.36,1)',
+                  }} />
+                </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -316,8 +323,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
-                {contrapartes.map(nombre => (
-                  <div key={nombre} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}>
+                {contrapartes.map((nombre, i) => (
+                  <div key={nombre} className="avatar-hover stagger" title={nombre} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px', animationDelay: `${i * 50}ms` }}>
                     <Avatar name={nombre} size={50} />
                     <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 500, textAlign: 'center', lineHeight: 1.3, maxWidth: '56px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {nombre.split(' ')[0]}
@@ -373,20 +380,19 @@ export default function Dashboard() {
                   return (
                     <div
                       key={t.id}
+                      className="hist-row stagger"
                       style={{
                         display: 'grid', gridTemplateColumns: '1fr 90px 100px 80px',
                         alignItems: 'center',
                         padding: '11px 4px',
                         borderBottom: i < Math.min(historial.length, 7) - 1 ? '1px solid var(--border)' : 'none',
-                        transition: 'background 0.12s',
                         borderRadius: '6px',
+                        animationDelay: `${i * 40}ms`,
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       {/* Tipo */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                        <div style={{
+                        <div className="hist-icon" style={{
                           width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
                           background: isPend ? 'var(--amber-bg)' : t.es_salida ? 'rgba(248,113,113,0.1)' : 'var(--green-bg)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center', color,
@@ -426,13 +432,15 @@ export default function Dashboard() {
 
       </main>
 
-      {mostrarDeposito && (
-        <DepositoModal
-          montoInicial={deposito}
-          onClose={() => setMostrarDeposito(false)}
-          onSuccess={handleDepositoExitoso}
-        />
-      )}
+      <AnimatePresence>
+        {mostrarDeposito && (
+          <DepositoModal
+            montoInicial={deposito}
+            onClose={() => setMostrarDeposito(false)}
+            onSuccess={handleDepositoExitoso}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

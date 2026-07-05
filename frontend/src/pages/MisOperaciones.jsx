@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Package, ShoppingBag, ChevronRight, Plus, Inbox } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
@@ -11,10 +12,25 @@ const ESTADO_MAP = {
   expirado:  { color: 'var(--text3)', bg: 'rgba(82,82,91,0.15)',           label: 'Expirado' },
 }
 
+const FILTROS = [
+  { key: 'todas',     label: 'Todas' },
+  { key: 'comprador', label: 'Compras' },
+  { key: 'vendedor',  label: 'Ventas' },
+  { key: 'retenido',  label: 'Retenidas' },
+  { key: 'liberado',  label: 'Liberadas' },
+]
+
 export default function MisOperaciones() {
   const [operaciones, setOperaciones] = useState([])
   const [loading, setLoading] = useState(true)
+  const [filtro, setFiltro] = useState('todas')
   const navigate = useNavigate()
+
+  const visibles = operaciones.filter(op => {
+    if (filtro === 'todas') return true
+    if (filtro === 'comprador' || filtro === 'vendedor') return op.rol === filtro
+    return op.estado === filtro
+  })
 
   useEffect(() => { cargar() }, [])
 
@@ -53,6 +69,40 @@ export default function MisOperaciones() {
             Nueva operación
           </button>
         </div>
+
+        {/* ── Filtros ── */}
+        {!loading && operaciones.length > 0 && (
+          <div style={{
+            display: 'flex', gap: '3px', background: 'var(--surface2)',
+            border: '1px solid var(--border)', padding: '3px', borderRadius: '10px',
+            width: 'fit-content', marginBottom: '18px', flexWrap: 'wrap',
+          }}>
+            {FILTROS.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFiltro(f.key)}
+                style={{
+                  position: 'relative', background: 'transparent', padding: '6px 14px',
+                  fontSize: '12px', fontWeight: filtro === f.key ? 500 : 400,
+                  color: filtro === f.key ? 'var(--text)' : 'var(--text3)',
+                }}
+              >
+                {filtro === f.key && (
+                  <motion.span
+                    layoutId="filtro-pill"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                    style={{
+                      position: 'absolute', inset: 0, background: 'var(--surface)',
+                      border: '1px solid var(--border)', borderRadius: '7px',
+                      boxShadow: 'var(--shadow-sm)',
+                    }}
+                  />
+                )}
+                <span style={{ position: 'relative' }}>{f.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── List ── */}
         {loading ? (
@@ -94,22 +144,34 @@ export default function MisOperaciones() {
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {operaciones.map((op, index) => {
+          <motion.div layout style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {visibles.length === 0 && (
+              <motion.p
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                style={{ fontSize: '12.5px', color: 'var(--text3)', textAlign: 'center', padding: '28px 0' }}
+              >
+                No hay operaciones con este filtro
+              </motion.p>
+            )}
+            <AnimatePresence mode="popLayout">
+            {visibles.map((op, index) => {
               const estado = ESTADO_MAP[op.estado] || ESTADO_MAP.expirado
               const isComprador = op.rol === 'comprador'
               const Icon = isComprador ? ShoppingBag : Package
 
               return (
-                <div
+                <motion.div
                   key={op.escrow_id}
+                  layout
+                  initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32, delay: index * 0.03 }}
                   onClick={() => navigate(`/operacion/${op.escrow_id}`)}
                   className="card op-card"
                   style={{
                     display: 'flex', alignItems: 'center', gap: '14px',
                     padding: '14px 18px',
-                    animationDelay: `${index * 45}ms`,
-                    animation: 'fadeUp 0.35s cubic-bezier(0.22,1,0.36,1) both',
                   }}
                 >
                   {/* Role icon */}
@@ -162,10 +224,11 @@ export default function MisOperaciones() {
                   </div>
 
                   <ChevronRight size={16} color="var(--text3)" style={{ flexShrink: 0 }} />
-                </div>
+                </motion.div>
               )
             })}
-          </div>
+            </AnimatePresence>
+          </motion.div>
         )}
       </main>
     </div>

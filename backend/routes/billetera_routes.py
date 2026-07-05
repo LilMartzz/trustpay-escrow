@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
@@ -65,7 +66,12 @@ def depositar(
     db.add(transaccion)
     db.commit()
 
-    return {"mensaje": f"Depósito de S/ {monto:.2f} exitoso", "saldo": float(billetera.saldo)}
+    return {
+        "mensaje": f"Depósito de S/ {monto:.2f} exitoso",
+        "saldo": float(billetera.saldo),
+        "referencia": pago["id"],
+        "fecha": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.post("/transferir")

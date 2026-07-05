@@ -40,9 +40,11 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
       // Resuelve la marca de la tarjeta (Visa/Mastercard/etc.) a partir del BIN.
       // Si la búsqueda por BIN de Mercado Pago falla, cae al prefijo del número como respaldo.
       let paymentMethodId = null
+      let paymentTypeId = 'credit_card'
       try {
         const metodos = await mp.getPaymentMethods({ bin: numeroLimpio.slice(0, 6) })
         paymentMethodId = metodos.results?.[0]?.id || null
+        paymentTypeId = metodos.results?.[0]?.payment_type_id || 'credit_card'
       } catch {
         paymentMethodId = null
       }
@@ -75,7 +77,7 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
       }
 
       const res = await api.post('/billetera/depositar', null, {
-        params: { monto, mp_token: tokenResp.id, payment_method_id: paymentMethodId, identification_number: dni, payer_email: email },
+        params: { monto, mp_token: tokenResp.id, payment_method_id: paymentMethodId, identification_number: dni, payer_email: email, payment_type_id: paymentTypeId },
       })
       onSuccess(res.data)
     } catch (err) {

@@ -41,7 +41,7 @@ function labelH(t) {
     if (t.estado === 'pendiente') return 'Escrow retenido'
     return t.es_salida ? 'Pago escrow' : 'Cobro escrow'
   }
-  if (t.tipo === 'deposito_culqi') return 'Depósito con tarjeta'
+  if (t.tipo === 'deposito_mercadopago') return 'Depósito con tarjeta'
   return t.es_salida ? 'Transferencia enviada' : 'Transferencia recibida'
 }
 function colorH(t) {

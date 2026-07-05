@@ -4,7 +4,7 @@ from database import get_db
 from models import Billetera, Transaccion, Usuario
 from dependencies import get_usuario_actual
 from decimal import Decimal
-from culqi_client import crear_cargo
+from mercadopago_client import crear_pago
 
 router = APIRouter(prefix="/billetera", tags=["billetera"])
 
@@ -23,18 +23,20 @@ def ver_saldo(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)
 @router.post("/depositar")
 def depositar(
     monto: float,
-    culqi_token: str,
+    mp_token: str,
+    payment_method_id: str,
+    identification_number: str,
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
     if monto <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
-    cargo = crear_cargo(culqi_token, monto, usuario.email)
-    if not cargo["exitoso"]:
-        if cargo["mensaje"] == "Culqi no está configurado":
-            raise HTTPException(status_code=503, detail=cargo["mensaje"])
-        raise HTTPException(status_code=400, detail=cargo["mensaje"])
+    pago = crear_pago(mp_token, monto, usuario.email, payment_method_id, identification_number)
+    if not pago["exitoso"]:
+        if pago["mensaje"] == "Mercado Pago no está configurado":
+            raise HTTPException(status_code=503, detail=pago["mensaje"])
+        raise HTTPException(status_code=400, detail=pago["mensaje"])
 
     billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
     billetera.saldo += Decimal(str(monto))
@@ -43,9 +45,9 @@ def depositar(
         billetera_origen=None,
         billetera_destino=billetera.id,
         monto=monto,
-        tipo="deposito_culqi",
+        tipo="deposito_mercadopago",
         estado="completada",
-        referencia_externa=cargo["id"],
+        referencia_externa=pago["id"],
     )
     db.add(transaccion)
     db.commit()

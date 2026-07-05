@@ -2,13 +2,23 @@ import { useState } from 'react'
 import { X, CreditCard, Lock } from 'lucide-react'
 import api from '../services/api'
 
+// Detección de marca por prefijo, como respaldo si la búsqueda por BIN de Mercado Pago falla.
+function detectarMarcaPorPrefijo(numero) {
+  if (/^4/.test(numero)) return 'visa'
+  if (/^(5[1-5]|2[2-7])/.test(numero)) return 'master'
+  if (/^3[47]/.test(numero)) return 'amex'
+  return null
+}
+
 export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
   const [monto, setMonto] = useState(montoInicial || '')
   const [numero, setNumero] = useState('')
+  const [nombreTitular, setNombreTitular] = useState('')
   const [mes, setMes] = useState('')
   const [anio, setAnio] = useState('')
   const [cvv, setCvv] = useState('')
   const [email, setEmail] = useState('')
+  const [dni, setDni] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -16,40 +26,56 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
     e.preventDefault()
     setError('')
 
-    const publicKey = import.meta.env.VITE_CULQI_PUBLIC_KEY
-    if (!publicKey) {
-      setError('Culqi no está configurado.')
+    const publicKey = import.meta.env.VITE_MP_PUBLIC_KEY
+    if (!publicKey || typeof window.MercadoPago === 'undefined') {
+      setError('Mercado Pago no está configurado.')
       return
     }
 
     setLoading(true)
     try {
-      // Tokenización directa contra la API de Culqi con la llave pública —
-      // la tarjeta viaja del navegador a Culqi, nunca pasa por nuestro backend.
-      const tokenResp = await fetch('https://secure.culqi.com/v2/tokens', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${publicKey}`,
-        },
-        body: JSON.stringify({
-          card_number: numero.replace(/\s/g, ''),
-          cvv,
-          expiration_month: mes,
-          expiration_year: anio,
-          email,
-        }),
-      })
-      const tokenData = await tokenResp.json()
+      const mp = new window.MercadoPago(publicKey, { locale: 'es-PE' })
+      const numeroLimpio = numero.replace(/\s/g, '')
 
-      if (tokenData.object !== 'token') {
-        setError(tokenData.user_message || tokenData.merchant_message || 'La tarjeta fue rechazada')
+      // Resuelve la marca de la tarjeta (Visa/Mastercard/etc.) a partir del BIN.
+      // Si la búsqueda por BIN de Mercado Pago falla, cae al prefijo del número como respaldo.
+      let paymentMethodId = null
+      try {
+        const metodos = await mp.getPaymentMethods({ bin: numeroLimpio.slice(0, 6) })
+        paymentMethodId = metodos.results?.[0]?.id || null
+      } catch {
+        paymentMethodId = null
+      }
+      if (!paymentMethodId) {
+        paymentMethodId = detectarMarcaPorPrefijo(numeroLimpio)
+      }
+      if (!paymentMethodId) {
+        setError('No se reconoció la tarjeta. Verifica el número.')
+        setLoading(false)
+        return
+      }
+
+      // Tokenización vía SDK de Mercado Pago — cifra la tarjeta en el navegador,
+      // nunca pasa por nuestro backend.
+      const tokenResp = await mp.createCardToken({
+        cardNumber: numeroLimpio,
+        cardholderName: nombreTitular,
+        cardExpirationMonth: mes,
+        cardExpirationYear: anio,
+        securityCode: cvv,
+        email,
+        identificationType: 'DNI',
+        identificationNumber: dni,
+      })
+
+      if (!tokenResp.id) {
+        setError('La tarjeta fue rechazada')
         setLoading(false)
         return
       }
 
       const res = await api.post('/billetera/depositar', null, {
-        params: { monto, culqi_token: tokenData.id },
+        params: { monto, mp_token: tokenResp.id, payment_method_id: paymentMethodId, identification_number: dni },
       })
       onSuccess(res.data)
     } catch (err) {
@@ -78,7 +104,7 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
           <h3 style={{ fontFamily: 'Syne', fontSize: '16px', fontWeight: 700 }}>Depositar con tarjeta</h3>
         </div>
         <p style={{ fontSize: '12px', color: 'var(--text3)', marginBottom: '18px' }}>
-          Procesado de forma segura por Culqi. Tu tarjeta nunca pasa por nuestros servidores.
+          Procesado de forma segura por Mercado Pago. Tu tarjeta nunca pasa por nuestros servidores.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -96,6 +122,14 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
               type="text" placeholder="4111 1111 1111 1111" required
               value={numero} onChange={e => setNumero(e.target.value)}
               maxLength={19}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="label">Nombre del titular</label>
+            <input
+              type="text" placeholder="Como aparece en la tarjeta" required
+              value={nombreTitular} onChange={e => setNombreTitular(e.target.value)}
             />
           </div>
 
@@ -117,6 +151,11 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
           <div className="form-group">
             <label className="label">Email</label>
             <input type="email" required value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+
+          <div className="form-group">
+            <label className="label">DNI del titular</label>
+            <input type="text" placeholder="12345678" required value={dni} onChange={e => setDni(e.target.value)} maxLength={15} />
           </div>
 
           {error && <p className="alert alert-error">{error}</p>}

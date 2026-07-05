@@ -75,7 +75,7 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
       }
 
       const res = await api.post('/billetera/depositar', null, {
-        params: { monto, mp_token: tokenResp.id, payment_method_id: paymentMethodId, identification_number: dni },
+        params: { monto, mp_token: tokenResp.id, payment_method_id: paymentMethodId, identification_number: dni, payer_email: email },
       })
       onSuccess(res.data)
     } catch (err) {

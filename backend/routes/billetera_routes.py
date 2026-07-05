@@ -26,13 +26,18 @@ def depositar(
     mp_token: str,
     payment_method_id: str,
     identification_number: str,
+    payer_email: str | None = None,
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
     if monto <= 0:
         raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
 
-    pago = crear_pago(mp_token, monto, usuario.email, payment_method_id, identification_number)
+    # Mercado Pago rechaza la operación si payer.email pertenece a una cuenta real
+    # de Mercado Pago cuando se opera con credenciales de cuentas de prueba
+    # ("Unauthorized use of live credentials"), así que el email del pagador es el
+    # del formulario de la tarjeta, no el de la sesión.
+    pago = crear_pago(mp_token, monto, payer_email or usuario.email, payment_method_id, identification_number)
     if not pago["exitoso"]:
         if pago["mensaje"] == "Mercado Pago no está configurado":
             raise HTTPException(status_code=503, detail=pago["mensaje"])

@@ -12,6 +12,7 @@ import Operacion from './pages/Operacion'
 import MisOperaciones from './pages/MisOperaciones'
 import Perfil from './pages/Perfil'
 import PerfilPublico from './pages/PerfilPublico'
+import Admin from './pages/Admin'
 
 const PrivateRoute = ({ children }) => {
   const { user, loading, emailVerified } = useAuth()
@@ -43,6 +44,7 @@ function AnimatedRoutes() {
           <Route path="/operacion/:escrowId" element={<PrivateRoute><Operacion /></PrivateRoute>} />
           <Route path="/perfil" element={<PrivateRoute><Perfil /></PrivateRoute>} />
           <Route path="/usuario/:email" element={<PrivateRoute><PerfilPublico /></PrivateRoute>} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </motion.div>

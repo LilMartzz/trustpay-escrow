@@ -101,6 +101,10 @@ export default function Perfil() {
 
   const verificar = async (e) => {
     e.preventDefault()
+    if (!perfil?.dni_numero && !dniValido) {
+      flash('Primero valida tu número de DNI (paso 1)', true)
+      return
+    }
     if (!dniFrontalFile || !dniReversoFile || !selfieFile) { flash('Debes subir las 3 imágenes', true); return }
     setLoading(true)
     try {

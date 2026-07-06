@@ -22,6 +22,12 @@ from tasks import iniciar_scheduler
 init_firebase()
 Base.metadata.create_all(bind=engine)
 
+# Mini-migración: create_all no agrega columnas a tablas existentes.
+from sqlalchemy import text
+
+with engine.begin() as conn:
+    conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS dni_nombre_reniec VARCHAR"))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

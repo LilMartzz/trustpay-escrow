@@ -21,6 +21,7 @@ class Usuario(Base):
     dni_reverso_url = Column(String, nullable=True)
     selfie_url = Column(String, nullable=True)
     dni_numero = Column(String(8), nullable=True)
+    dni_nombre_reniec = Column(String, nullable=True)
     fcm_token = Column(String, nullable=True)
 
 

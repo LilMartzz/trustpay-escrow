@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import { X, CreditCard, Lock, Check, ShieldCheck } from 'lucide-react'
@@ -31,6 +31,7 @@ function lanzarConfetti() {
 }
 
 export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
+  const montoRef = useRef(null)
   const [monto, setMonto] = useState(montoInicial || '')
   const [numero, setNumero] = useState('')
   const [nombreTitular, setNombreTitular] = useState('')
@@ -41,6 +42,7 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
   const [dni, setDni] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pendiente, setPendiente] = useState('')
   const [girada, setGirada] = useState(false)
   const [comprobante, setComprobante] = useState(null)
 
@@ -51,6 +53,14 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
   useEffect(() => {
     if (comprobante) lanzarConfetti()
   }, [comprobante])
+
+  // Accesibilidad del diálogo: cerrar con Escape y enfocar el primer campo.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !loading) onClose() }
+    window.addEventListener('keydown', onKey)
+    montoRef.current?.focus()
+    return () => window.removeEventListener('keydown', onKey)
+  }, [loading, onClose])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -105,9 +115,20 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
         return
       }
 
-      const res = await api.post('/billetera/depositar', null, {
-        params: { monto, mp_token: tokenResp.id, payment_method_id: paymentMethodId, identification_number: dni, payer_email: email, payment_type_id: paymentTypeId },
+      const res = await api.post('/billetera/depositar', {
+        monto: parseFloat(monto),
+        mp_token: tokenResp.id,
+        payment_method_id: paymentMethodId,
+        identification_number: dni,
+        payer_email: email,
+        payment_type_id: paymentTypeId,
       })
+      if (res.data.estado === 'pendiente') {
+        setError('')
+        setPendiente(res.data.mensaje || 'Tu pago está en proceso. Se acreditará automáticamente al confirmarse.')
+        setLoading(false)
+        return
+      }
       setComprobante({
         referencia: res.data.referencia,
         fecha: res.data.fecha ? new Date(res.data.fecha) : new Date(),
@@ -133,6 +154,9 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
     >
       <motion.div
         className="card modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Recargar saldo"
         style={{ maxWidth: '420px', width: '100%', position: 'relative', animation: 'none' }}
         initial={{ opacity: 0, y: 26, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -140,7 +164,24 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
       >
         <AnimatePresence mode="wait" initial={false}>
-          {comprobante ? (
+          {pendiente ? (
+            /* ── Pago en proceso (Mercado Pago aún no lo resuelve) ── */
+            <motion.div
+              key="pendiente"
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              style={{ textAlign: 'center' }}
+            >
+              <h3 style={{ fontFamily: 'Syne', fontSize: '17px', fontWeight: 700, margin: '8px 0 6px' }}>
+                Pago en proceso
+              </h3>
+              <p style={{ fontSize: '12.5px', color: 'var(--text2)', marginBottom: '18px', lineHeight: 1.5 }}>
+                {pendiente}
+              </p>
+              <button onClick={onClose} className="btn-primary">Entendido</button>
+            </motion.div>
+          ) : comprobante ? (
             /* ── Comprobante (detalle de la recarga, requerido por normativa) ── */
             <motion.div
               key="comprobante"
@@ -188,6 +229,7 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
               <button
                 onClick={onClose}
                 className="btn-ghost"
+                aria-label="Cerrar"
                 style={{ position: 'absolute', top: '14px', right: '14px', padding: '6px', zIndex: 2 }}
               >
                 <X size={16} />
@@ -233,6 +275,7 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
                 <div className="form-group stagger" style={{ animationDelay: '0.03s' }}>
                   <label className="label">Monto a recargar (S/)</label>
                   <input
+                    ref={montoRef}
                     type="number" min="1" step="0.01" required
                     value={monto} onChange={e => setMonto(e.target.value)}
                   />

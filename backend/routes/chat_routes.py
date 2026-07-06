@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+
 from database import get_db
-from models import Billetera, Transaccion, Escrow, Mensaje, Usuario
-from dependencies import get_usuario_actual
+from models import Billetera, Mensaje, Usuario
+from dependencies import get_usuario_actual, contexto_escrow
 from notificaciones import enviar_notificacion
+from utils import iso_utc
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 class MensajeCreate(BaseModel):
-    contenido: str
+    contenido: str = Field(max_length=2000)
 
     @field_validator("contenido")
     @classmethod
@@ -20,21 +22,6 @@ class MensajeCreate(BaseModel):
         return v.strip()
 
 
-def _verificar_participante(escrow_id: str, usuario, db: Session):
-    escrow = db.query(Escrow).filter(Escrow.id == escrow_id).first()
-    if not escrow:
-        raise HTTPException(status_code=404, detail="Escrow no encontrado")
-    transaccion = db.query(Transaccion).filter(Transaccion.id == escrow.transaccion_id).first()
-    billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
-    es_parte = (
-        str(billetera.id) == str(transaccion.billetera_origen)
-        or str(billetera.id) == str(transaccion.billetera_destino)
-    )
-    if not es_parte:
-        raise HTTPException(status_code=403, detail="No tienes acceso a este chat")
-    return escrow
-
-
 @router.post("/{escrow_id}")
 def enviar_mensaje(
     escrow_id: str,
@@ -42,64 +29,62 @@ def enviar_mensaje(
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    escrow = _verificar_participante(escrow_id, usuario, db)
+    escrow, transaccion, billetera, es_comprador, _ = contexto_escrow(escrow_id, usuario, db)
 
     mensaje = Mensaje(
-        escrow_id=escrow_id,
+        escrow_id=escrow.id,
         remitente_id=usuario.id,
         contenido=data.contenido,
     )
     db.add(mensaje)
     db.commit()
 
-    transaccion = db.query(Transaccion).filter(Transaccion.id == escrow.transaccion_id).first()
-    billetera_remitente = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
-    otra_billetera_id = (
-        transaccion.billetera_destino
-        if str(billetera_remitente.id) == str(transaccion.billetera_origen)
-        else transaccion.billetera_origen
-    )
+    otra_billetera_id = transaccion.billetera_destino if es_comprador else transaccion.billetera_origen
     otra_billetera = db.query(Billetera).filter(Billetera.id == otra_billetera_id).first()
-    enviar_notificacion(
-        db, otra_billetera.usuario_id,
-        f"Nuevo mensaje de {usuario.nombre}",
-        data.contenido[:100],
-    )
+    if otra_billetera:
+        enviar_notificacion(
+            db, otra_billetera.usuario_id,
+            f"Nuevo mensaje de {usuario.nombre}",
+            data.contenido[:100],
+        )
 
     return {
         "id": str(mensaje.id),
         "contenido": mensaje.contenido,
         "remitente_nombre": usuario.nombre,
         "es_propio": True,
-        "creado_en": str(mensaje.creado_en),
+        "creado_en": iso_utc(mensaje.creado_en),
     }
 
 
 @router.get("/{escrow_id}")
 def obtener_mensajes(
     escrow_id: str,
+    limit: int = Query(200, ge=1, le=500),
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    _verificar_participante(escrow_id, usuario, db)
+    escrow, *_ = contexto_escrow(escrow_id, usuario, db)
 
-    mensajes = (
-        db.query(Mensaje)
-        .filter(Mensaje.escrow_id == escrow_id)
-        .order_by(Mensaje.creado_en.asc())
+    # Últimos `limit` mensajes con su remitente en un solo query (sin N+1),
+    # devueltos en orden cronológico.
+    filas = (
+        db.query(Mensaje, Usuario.nombre)
+        .outerjoin(Usuario, Usuario.id == Mensaje.remitente_id)
+        .filter(Mensaje.escrow_id == escrow.id)
+        .order_by(Mensaje.creado_en.desc())
+        .limit(limit)
         .all()
     )
 
-    resultado = []
-    for m in mensajes:
-        remitente = db.query(Usuario).filter(Usuario.id == m.remitente_id).first()
-        resultado.append({
+    return [
+        {
             "id": str(m.id),
             "contenido": m.contenido,
             "remitente_id": str(m.remitente_id),
-            "remitente_nombre": remitente.nombre if remitente else "Usuario",
+            "remitente_nombre": nombre or "Usuario",
             "es_propio": str(m.remitente_id) == str(usuario.id),
-            "creado_en": str(m.creado_en),
-        })
-
-    return resultado
+            "creado_en": iso_utc(m.creado_en),
+        }
+        for m, nombre in reversed(filas)
+    ]

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+
 from database import get_db
-from models import Billetera, Transaccion, Escrow, Envio
-from dependencies import get_usuario_actual
+from models import Billetera, Envio
+from dependencies import get_usuario_actual, contexto_escrow
 from notificaciones import enviar_notificacion
+from utils import iso_utc
 
 router = APIRouter(prefix="/envio", tags=["envio"])
 
@@ -16,8 +18,8 @@ EMPRESAS = [
 
 class EnvioCreate(BaseModel):
     empresa: str
-    numero_guia: str
-    descripcion_producto: str = ""
+    numero_guia: str = Field(max_length=100)
+    descripcion_producto: str = Field(default="", max_length=500)
 
     @field_validator("empresa")
     @classmethod
@@ -34,19 +36,6 @@ class EnvioCreate(BaseModel):
         return v.strip()
 
 
-def _verificar_participante(escrow_id: str, usuario, db: Session):
-    escrow = db.query(Escrow).filter(Escrow.id == escrow_id).first()
-    if not escrow:
-        raise HTTPException(status_code=404, detail="Escrow no encontrado")
-    transaccion = db.query(Transaccion).filter(Transaccion.id == escrow.transaccion_id).first()
-    billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
-    es_comprador = str(billetera.id) == str(transaccion.billetera_origen)
-    es_vendedor = str(billetera.id) == str(transaccion.billetera_destino)
-    if not es_comprador and not es_vendedor:
-        raise HTTPException(status_code=403, detail="No tienes acceso a esta operación")
-    return escrow, transaccion, billetera, es_comprador, es_vendedor
-
-
 @router.post("/{escrow_id}")
 def registrar_envio(
     escrow_id: str,
@@ -54,14 +43,14 @@ def registrar_envio(
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    escrow, transaccion, billetera, _, es_vendedor = _verificar_participante(escrow_id, usuario, db)
+    escrow, transaccion, _, _, es_vendedor = contexto_escrow(escrow_id, usuario, db)
 
     if not es_vendedor:
         raise HTTPException(status_code=403, detail="Solo el vendedor puede registrar el envío")
     if escrow.estado != "retenido":
         raise HTTPException(status_code=400, detail="El escrow no está activo")
 
-    envio = db.query(Envio).filter(Envio.escrow_id == escrow_id).first()
+    envio = db.query(Envio).filter(Envio.escrow_id == escrow.id).first()
     if envio:
         envio.empresa = data.empresa
         envio.numero_guia = data.numero_guia
@@ -69,7 +58,7 @@ def registrar_envio(
         envio.estado = "en_camino"
     else:
         envio = Envio(
-            escrow_id=escrow_id,
+            escrow_id=escrow.id,
             empresa=data.empresa,
             numero_guia=data.numero_guia,
             descripcion_producto=data.descripcion_producto,
@@ -80,11 +69,12 @@ def registrar_envio(
     db.commit()
 
     billetera_comprador = db.query(Billetera).filter(Billetera.id == transaccion.billetera_origen).first()
-    enviar_notificacion(
-        db, billetera_comprador.usuario_id,
-        "Tu pedido fue enviado",
-        f"{usuario.nombre} despachó tu pedido con {envio.empresa} — guía {envio.numero_guia}",
-    )
+    if billetera_comprador:
+        enviar_notificacion(
+            db, billetera_comprador.usuario_id,
+            "Tu pedido fue enviado",
+            f"{usuario.nombre} despachó tu pedido con {envio.empresa} — guía {envio.numero_guia}",
+        )
 
     return {
         "mensaje": "Envío registrado correctamente",
@@ -100,9 +90,9 @@ def ver_envio(
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    _verificar_participante(escrow_id, usuario, db)
+    escrow, *_ = contexto_escrow(escrow_id, usuario, db)
 
-    envio = db.query(Envio).filter(Envio.escrow_id == escrow_id).first()
+    envio = db.query(Envio).filter(Envio.escrow_id == escrow.id).first()
     if not envio:
         return None
 
@@ -111,7 +101,7 @@ def ver_envio(
         "numero_guia": envio.numero_guia,
         "estado": envio.estado,
         "descripcion_producto": envio.descripcion_producto,
-        "creado_en": str(envio.creado_en),
+        "creado_en": iso_utc(envio.creado_en),
     }
 
 
@@ -129,11 +119,11 @@ def actualizar_estado_envio(
             detail=f"Estado inválido. Opciones: {estados_validos}",
         )
 
-    escrow, transaccion, billetera, _, es_vendedor = _verificar_participante(escrow_id, usuario, db)
+    escrow, _, _, _, es_vendedor = contexto_escrow(escrow_id, usuario, db)
     if not es_vendedor:
         raise HTTPException(status_code=403, detail="Solo el vendedor puede actualizar el estado")
 
-    envio = db.query(Envio).filter(Envio.escrow_id == escrow_id).first()
+    envio = db.query(Envio).filter(Envio.escrow_id == escrow.id).first()
     if not envio:
         raise HTTPException(status_code=404, detail="Primero registra el envío")
 

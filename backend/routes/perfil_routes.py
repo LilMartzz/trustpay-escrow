@@ -1,19 +1,34 @@
 import os
 import re
 import unicodedata
-from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
+
 from database import get_db
 from models import Usuario, Calificacion, Billetera, Transaccion, Escrow
-from dependencies import get_usuario_actual
+from dependencies import get_usuario_actual, requiere_admin, rate_limiter, parse_uuid
 from rekognition_client import comparar_rostros
 from almacenamiento import guardar_documento_privado, leer_documento_privado
 from schemas import FcmTokenRequest
 from routes.calificacion_routes import resumen_calificacion
+from utils import iso_utc
 
 router = APIRouter(prefix="/perfil", tags=["perfil"])
+
+TAMANO_MAXIMO_DOCUMENTO = 8 * 1024 * 1024  # 8 MB por imagen
+
+
+class PerfilUpdate(BaseModel):
+    nombre: str | None = Field(default=None, max_length=120)
+    telefono: str | None = Field(default=None, max_length=20)
+
+
+class DniRequest(BaseModel):
+    numero_dni: str
 
 
 def _normalizar(texto: str) -> str:
@@ -33,14 +48,6 @@ def _nombre_coincide(nombre_cuenta: str, nombre_reniec: str) -> bool:
     tokens_reniec = set(_normalizar(nombre_reniec).split())
     coincidencias = sum(1 for t in tokens_cuenta if t in tokens_reniec)
     return coincidencias >= min(2, len(tokens_cuenta))
-
-
-def _requiere_admin(x_admin_key: str | None):
-    clave = os.getenv("ADMIN_API_KEY")
-    if not clave:
-        raise HTTPException(status_code=503, detail="Revisión manual no configurada (falta ADMIN_API_KEY)")
-    if x_admin_key != clave:
-        raise HTTPException(status_code=403, detail="Clave de administrador inválida")
 
 
 @router.get("/buscar")
@@ -88,7 +95,7 @@ def ver_perfil(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db
         "dni_numero": usuario.dni_numero,
         "nombre_reniec": usuario.dni_nombre_reniec,
         "documentos_subidos": bool(usuario.dni_frontal_url and usuario.selfie_url),
-        "creado_en": str(usuario.creado_en),
+        "creado_en": iso_utc(usuario.creado_en),
         **resumen_calificacion(db, usuario.id),
     }
 
@@ -105,8 +112,10 @@ def perfil_publico(
     if not u:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    calificaciones = (
-        db.query(Calificacion)
+    # Calificaciones con su autor en un solo query (sin N+1).
+    filas = (
+        db.query(Calificacion, Usuario.nombre)
+        .outerjoin(Usuario, Usuario.id == Calificacion.calificador_id)
         .filter(Calificacion.calificado_id == u.id)
         .order_by(Calificacion.creado_en.desc())
         .all()
@@ -114,15 +123,14 @@ def perfil_publico(
 
     distribucion = {n: 0 for n in range(1, 6)}
     lista = []
-    for c in calificaciones:
+    for c, autor_nombre in filas:
         distribucion[c.puntuacion] = distribucion.get(c.puntuacion, 0) + 1
-        autor = db.query(Usuario).filter(Usuario.id == c.calificador_id).first()
         lista.append({
             "puntuacion": c.puntuacion,
             "comentario": c.comentario,
-            "fecha": str(c.creado_en),
-            "autor": autor.nombre if autor else "Usuario",
-            "autor_iniciales": (autor.nombre[:2].upper() if autor and autor.nombre else "??"),
+            "fecha": iso_utc(c.creado_en),
+            "autor": autor_nombre or "Usuario",
+            "autor_iniciales": (autor_nombre[:2].upper() if autor_nombre else "??"),
         })
 
     # Operaciones escrow completadas (como comprador o vendedor)
@@ -147,7 +155,7 @@ def perfil_publico(
         "nombre": u.nombre,
         "email": u.email,
         "verificado": u.verificado,
-        "miembro_desde": str(u.creado_en),
+        "miembro_desde": iso_utc(u.creado_en),
         "promedio": resumen["calificacion_promedio"],
         "cantidad": resumen["calificacion_cantidad"],
         "distribucion": distribucion,
@@ -169,30 +177,54 @@ def guardar_fcm_token(
 
 @router.put("/actualizar")
 def actualizar_perfil(
-    nombre: str = None,
-    telefono: str = None,
+    data: PerfilUpdate,
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    if nombre:
-        usuario.nombre = nombre
-    if telefono:
-        usuario.telefono = telefono
+    if data.nombre and data.nombre != usuario.nombre:
+        # El nombre quedó contrastado contra RENIEC al verificar la identidad;
+        # permitir cambiarlo después dejaría el badge "verificado" sin sustento.
+        if usuario.verificado == "verificado":
+            raise HTTPException(
+                status_code=403,
+                detail="Tu identidad ya fue verificada con este nombre: no puede modificarse.",
+            )
+        usuario.nombre = data.nombre
+    if data.telefono:
+        usuario.telefono = data.telefono
     db.commit()
     return {"mensaje": "Perfil actualizado correctamente"}
 
 
 @router.post("/validar-dni")
 def validar_dni(
-    numero_dni: str,
+    data: DniRequest,
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    numero_dni = numero_dni.strip()
+    # Cada llamada consume cuota de apiperu y permitiría enumerar DNIs.
+    rate_limiter.verificar(f"dni:{usuario.id}", 5, 600)
+
+    if usuario.verificado == "verificado":
+        raise HTTPException(status_code=400, detail="Tu cuenta ya está verificada")
+
+    numero_dni = data.numero_dni.strip()
     if not re.match(r"^\d{8}$", numero_dni):
         raise HTTPException(
             status_code=400,
             detail="El DNI debe tener exactamente 8 dígitos numéricos",
+        )
+
+    # Un DNI identifica a una sola persona: no puede estar en dos cuentas.
+    duplicado = (
+        db.query(Usuario)
+        .filter(Usuario.dni_numero == numero_dni, Usuario.id != usuario.id)
+        .first()
+    )
+    if duplicado:
+        raise HTTPException(
+            status_code=409,
+            detail="Este DNI ya está registrado en otra cuenta de TrustPay",
         )
 
     resultado = {"valido": True, "numero_dni": numero_dni, "verificado_reniec": False}
@@ -211,11 +243,11 @@ def validar_dni(
             if resp.status_code == 200:
                 body = resp.json()
                 if body.get("success"):
-                    data = body.get("data", {})
+                    data_reniec = body.get("data", {})
                     nombre_reniec = (
-                        f"{data.get('nombres', '')} "
-                        f"{data.get('apellido_paterno', '')} "
-                        f"{data.get('apellido_materno', '')}"
+                        f"{data_reniec.get('nombres', '')} "
+                        f"{data_reniec.get('apellido_paterno', '')} "
+                        f"{data_reniec.get('apellido_materno', '')}"
                     ).strip()
                     resultado["verificado_reniec"] = True
                     resultado["nombre_reniec"] = nombre_reniec
@@ -245,6 +277,8 @@ def verificar_identidad(
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
+    rate_limiter.verificar(f"verificar:{usuario.id}", 3, 600)
+
     if usuario.verificado == "verificado":
         raise HTTPException(status_code=400, detail="Tu cuenta ya está verificada")
     if not usuario.dni_numero:
@@ -254,10 +288,12 @@ def verificar_identidad(
         )
 
     def guardar(archivo, prefijo):
-        ext = archivo.filename.rsplit(".", 1)[-1].lower()
+        ext = (archivo.filename or "").rsplit(".", 1)[-1].lower()
         if ext not in {"jpg", "jpeg", "png", "webp"}:
             raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG o PNG")
-        contenido = archivo.file.read()
+        contenido = archivo.file.read(TAMANO_MAXIMO_DOCUMENTO + 1)
+        if len(contenido) > TAMANO_MAXIMO_DOCUMENTO:
+            raise HTTPException(status_code=413, detail="Cada imagen debe pesar máximo 8 MB")
         return guardar_documento_privado(contenido, prefijo, ext), contenido
 
     dni_frontal_ref, dni_frontal_bytes = guardar(dni_frontal, "dni_frontal")
@@ -313,12 +349,8 @@ def ver_documento(tipo: str, usuario=Depends(get_usuario_actual)):
 
 # ── Revisión manual (requiere header X-Admin-Key = env ADMIN_API_KEY) ──
 
-@router.get("/admin/verificaciones-pendientes")
-def listar_verificaciones_pendientes(
-    x_admin_key: str = Header(None),
-    db: Session = Depends(get_db),
-):
-    _requiere_admin(x_admin_key)
+@router.get("/admin/verificaciones-pendientes", dependencies=[Depends(requiere_admin)])
+def listar_verificaciones_pendientes(db: Session = Depends(get_db)):
     pendientes = db.query(Usuario).filter(Usuario.verificado == "pendiente").all()
     return [
         {
@@ -333,17 +365,15 @@ def listar_verificaciones_pendientes(
     ]
 
 
-@router.post("/admin/resolver-verificacion/{usuario_id}")
+@router.post("/admin/resolver-verificacion/{usuario_id}", dependencies=[Depends(requiere_admin)])
 def resolver_verificacion(
     usuario_id: str,
     decision: str,
-    x_admin_key: str = Header(None),
     db: Session = Depends(get_db),
 ):
-    _requiere_admin(x_admin_key)
     if decision not in {"aprobar", "rechazar"}:
         raise HTTPException(status_code=400, detail="decision debe ser 'aprobar' o 'rechazar'")
-    u = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    u = db.query(Usuario).filter(Usuario.id == parse_uuid(usuario_id, "Usuario no encontrado")).first()
     if not u:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     if u.verificado != "pendiente":

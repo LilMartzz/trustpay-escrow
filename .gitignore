@@ -1,1 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+*.egg-info/
+
+# Secretos y configuración local
+.env
+firebase-service-account*.json
+
+# Archivos subidos por usuarios (nunca al repo)
+uploads/
 uploads_privados/
+backend/uploads/
+backend/uploads_privados/
+
+# Node / builds
+node_modules/
+dist/
+
+# SO / editores
+.DS_Store

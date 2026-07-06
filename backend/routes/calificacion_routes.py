@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+
 from database import get_db
-from models import Billetera, Transaccion, Escrow, Calificacion, Usuario
-from dependencies import get_usuario_actual
+from models import Billetera, Calificacion, Usuario
+from dependencies import get_usuario_actual, contexto_escrow, parse_uuid
 from notificaciones import enviar_notificacion
+from utils import iso_utc
 
 router = APIRouter(prefix="/calificacion", tags=["calificacion"])
 
@@ -26,7 +28,7 @@ def resumen_calificacion(db: Session, usuario_id) -> dict:
 
 class CalificacionCreate(BaseModel):
     puntuacion: int
-    comentario: str | None = None
+    comentario: str | None = Field(default=None, max_length=1000)
 
     @field_validator("puntuacion")
     @classmethod
@@ -36,19 +38,6 @@ class CalificacionCreate(BaseModel):
         return v
 
 
-def _verificar_participante(escrow_id: str, usuario, db: Session):
-    escrow = db.query(Escrow).filter(Escrow.id == escrow_id).first()
-    if not escrow:
-        raise HTTPException(status_code=404, detail="Escrow no encontrado")
-    transaccion = db.query(Transaccion).filter(Transaccion.id == escrow.transaccion_id).first()
-    billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
-    es_comprador = str(billetera.id) == str(transaccion.billetera_origen)
-    es_vendedor = str(billetera.id) == str(transaccion.billetera_destino)
-    if not es_comprador and not es_vendedor:
-        raise HTTPException(status_code=403, detail="No tienes acceso a esta operación")
-    return escrow, transaccion, es_comprador
-
-
 @router.post("/{escrow_id}")
 def calificar(
     escrow_id: str,
@@ -56,14 +45,14 @@ def calificar(
     usuario=Depends(get_usuario_actual),
     db: Session = Depends(get_db),
 ):
-    escrow, transaccion, es_comprador = _verificar_participante(escrow_id, usuario, db)
+    escrow, transaccion, _, es_comprador, _ = contexto_escrow(escrow_id, usuario, db)
 
     if escrow.estado != "liberado":
         raise HTTPException(status_code=400, detail="Solo puedes calificar operaciones ya liberadas")
 
     ya_calificado = (
         db.query(Calificacion)
-        .filter(Calificacion.escrow_id == escrow_id, Calificacion.calificador_id == usuario.id)
+        .filter(Calificacion.escrow_id == escrow.id, Calificacion.calificador_id == usuario.id)
         .first()
     )
     if ya_calificado:
@@ -71,9 +60,11 @@ def calificar(
 
     otra_billetera_id = transaccion.billetera_destino if es_comprador else transaccion.billetera_origen
     otra_billetera = db.query(Billetera).filter(Billetera.id == otra_billetera_id).first()
+    if not otra_billetera:
+        raise HTTPException(status_code=409, detail="No se encontró a la contraparte")
 
     calificacion = Calificacion(
-        escrow_id=escrow_id,
+        escrow_id=escrow.id,
         calificador_id=usuario.id,
         calificado_id=otra_billetera.usuario_id,
         puntuacion=data.puntuacion,
@@ -92,30 +83,35 @@ def calificar(
 
 
 @router.get("/usuario/{usuario_id}")
-def ver_calificaciones(usuario_id: str, db: Session = Depends(get_db)):
-    calificaciones = (
-        db.query(Calificacion)
-        .filter(Calificacion.calificado_id == usuario_id)
+def ver_calificaciones(
+    usuario_id: str,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    uid = parse_uuid(usuario_id, "Usuario no encontrado")
+
+    # Comentarios con su autor en un solo query (sin N+1).
+    filas = (
+        db.query(Calificacion, Usuario.nombre)
+        .outerjoin(Usuario, Usuario.id == Calificacion.calificador_id)
+        .filter(Calificacion.calificado_id == uid, Calificacion.comentario.isnot(None))
         .order_by(Calificacion.creado_en.desc())
+        .limit(limit)
         .all()
     )
 
-    resumen = resumen_calificacion(db, usuario_id)
-
-    comentarios = []
-    for c in calificaciones[:10]:
-        if not c.comentario:
-            continue
-        calificador = db.query(Usuario).filter(Usuario.id == c.calificador_id).first()
-        comentarios.append({
-            "nombre": calificador.nombre if calificador else "Usuario",
-            "puntuacion": c.puntuacion,
-            "comentario": c.comentario,
-            "fecha": str(c.creado_en),
-        })
+    resumen = resumen_calificacion(db, uid)
 
     return {
         "promedio": resumen["calificacion_promedio"],
         "cantidad": resumen["calificacion_cantidad"],
-        "comentarios": comentarios,
+        "comentarios": [
+            {
+                "nombre": nombre or "Usuario",
+                "puntuacion": c.puntuacion,
+                "comentario": c.comentario,
+                "fecha": iso_utc(c.creado_en),
+            }
+            for c, nombre in filas
+        ],
     }

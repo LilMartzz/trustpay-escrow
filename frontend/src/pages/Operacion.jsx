@@ -211,11 +211,22 @@ export default function Operacion() {
   const subirLink = async (e) => {
     e.preventDefault()
     try {
-      await api.post(`/evidencia/subir-link/${escrowId}?link=${encodeURIComponent(link)}&descripcion=${encodeURIComponent(descLink)}`)
+      await api.post(`/evidencia/subir-link/${escrowId}`, { link, descripcion: descLink })
       setLink(''); setDescLink('')
       flash('Evidencia registrada')
       cargarDatos()
-    } catch { flash('Error al registrar evidencia', true) }
+    } catch (err) {
+      flash(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || 'Error al registrar evidencia', true)
+    }
+  }
+
+  // Los archivos ya no son públicos: se descargan con el token de sesión
+  // y se abren como blob (un <a href> no puede mandar el header Authorization).
+  const abrirArchivo = async (ev) => {
+    try {
+      const res = await api.get(ev.url, { responseType: 'blob' })
+      window.open(URL.createObjectURL(res.data), '_blank', 'noopener')
+    } catch { flash('No se pudo abrir el archivo', true) }
   }
 
   const subirArchivo = async (e) => {
@@ -625,12 +636,21 @@ export default function Operacion() {
                             <div style={{ fontSize: '12.5px', fontWeight: 500, marginBottom: '5px' }}>
                               {ev.descripcion || 'Sin descripción'}
                             </div>
-                            <a href={ev.url} target="_blank" rel="noreferrer" style={{
-                              fontSize: '11.5px', color: 'var(--green)', wordBreak: 'break-all',
-                              display: 'flex', alignItems: 'center', gap: '4px',
-                            }}>
-                              {ev.tipo === 'archivo' ? <><Paperclip size={11} /> Archivo adjunto</> : <><ExternalLink size={11} /> {ev.url.substring(0, 40)}{ev.url.length > 40 ? '…' : ''}</>}
-                            </a>
+                            {ev.tipo === 'archivo' ? (
+                              <button type="button" onClick={() => abrirArchivo(ev)} className="btn-ghost" style={{
+                                fontSize: '11.5px', color: 'var(--green)', padding: 0,
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                              }}>
+                                <Paperclip size={11} /> Ver archivo adjunto
+                              </button>
+                            ) : (
+                              <a href={ev.url} target="_blank" rel="noreferrer" style={{
+                                fontSize: '11.5px', color: 'var(--green)', wordBreak: 'break-all',
+                                display: 'flex', alignItems: 'center', gap: '4px',
+                              }}>
+                                <ExternalLink size={11} /> {ev.url.substring(0, 40)}{ev.url.length > 40 ? '…' : ''}
+                              </a>
+                            )}
                             <div style={{ fontSize: '10.5px', color: 'var(--text3)', marginTop: '5px' }}>
                               {new Date(ev.fecha).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                             </div>

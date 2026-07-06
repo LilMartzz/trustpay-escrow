@@ -15,6 +15,11 @@ _TIPOS_MIME = {
     "jpeg": "image/jpeg",
     "png": "image/png",
     "webp": "image/webp",
+    "gif": "image/gif",
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "webm": "video/webm",
+    "pdf": "application/pdf",
 }
 
 _s3 = None
@@ -34,14 +39,15 @@ def _get_s3():
     return _s3
 
 
-def guardar_documento_privado(contenido: bytes, prefijo: str, ext: str) -> str:
+def guardar_documento_privado(contenido: bytes, prefijo: str, ext: str, carpeta: str = "identidad") -> str:
     """Guarda el documento y devuelve una referencia opaca:
     's3:<clave>' o 'local:<nombre>'. En Railway el disco es efímero, así que
-    S3 es el destino recomendado; el disco local es el respaldo para dev."""
+    S3 es el destino recomendado; el disco local es el respaldo para dev.
+    `carpeta` separa los espacios (identidad, evidencias)."""
     nombre = f"{prefijo}_{uuid.uuid4()}.{ext}"
     s3 = _get_s3()
     if s3 is not None:
-        clave = f"identidad/{nombre}"
+        clave = f"{carpeta}/{nombre}"
         try:
             s3.put_object(
                 Bucket=os.getenv("AWS_S3_BUCKET"),

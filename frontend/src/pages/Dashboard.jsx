@@ -121,8 +121,7 @@ export default function Dashboard() {
   const handleEscrow = async ({ monto, email_destino, descripcion }) => {
     setLoadingEsc(true)
     try {
-      const params = new URLSearchParams({ email_destino, monto, descripcion })
-      const res = await api.post(`/escrow/iniciar?${params}`)
+      const res = await api.post('/escrow/iniciar', { email_destino, monto, descripcion })
       await cargar()
       navigate(`/operacion/${res.data.escrow_id}`)
     } catch (err) {

@@ -80,17 +80,17 @@ export default function Perfil() {
   const actualizar = async (e) => {
     e.preventDefault()
     try {
-      await api.put(`/perfil/actualizar?nombre=${encodeURIComponent(nombre)}&telefono=${encodeURIComponent(telefono)}`)
+      await api.put('/perfil/actualizar', { nombre, telefono })
       flash('Perfil actualizado correctamente')
       cargar()
-    } catch { flash('Error al actualizar perfil', true) }
+    } catch (e) { flash(e.response?.data?.detail || 'Error al actualizar perfil', true) }
   }
 
   const validarDni = async () => {
     if (!/^\d{8}$/.test(dniNumero)) { flash('El DNI debe tener exactamente 8 dígitos', true); return }
     setValidandoDni(true)
     try {
-      const res = await api.post(`/perfil/validar-dni?numero_dni=${dniNumero}`)
+      const res = await api.post('/perfil/validar-dni', { numero_dni: dniNumero })
       setDniValido(res.data)
       flash(res.data.verificado_reniec
         ? `DNI verificado en RENIEC: ${res.data.nombre_reniec}`

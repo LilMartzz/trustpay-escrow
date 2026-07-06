@@ -1,14 +1,38 @@
 import uuid
-from datetime import datetime
+from utils import utcnow
 from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, Boolean, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
+from sqlalchemy.types import CHAR, TypeDecorator
 from database import Base
+
+
+class GUID(TypeDecorator):
+    """UUID portable: usa el tipo nativo en PostgreSQL y CHAR(36) en SQLite,
+    lo que permite correr la suite de tests sobre una BD en memoria."""
+
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None or dialect.name == "postgresql":
+            return value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None or isinstance(value, uuid.UUID):
+            return value
+        return uuid.UUID(value)
 
 
 class Usuario(Base):
     __tablename__ = "usuarios"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     firebase_uid = Column(String, unique=True, nullable=False)
     nombre = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
@@ -27,8 +51,8 @@ class Usuario(Base):
 
 class Billetera(Base):
     __tablename__ = "billetera"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    usuario_id = Column(GUID(), ForeignKey("usuarios.id"))
     saldo = Column(Numeric(12, 2), default=0)
     saldo_retenido = Column(Numeric(12, 2), default=0)
     estado = Column(String, default="activa")
@@ -37,21 +61,22 @@ class Billetera(Base):
 
 class Transaccion(Base):
     __tablename__ = "transacciones"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    billetera_origen = Column(UUID(as_uuid=True), ForeignKey("billetera.id"))
-    billetera_destino = Column(UUID(as_uuid=True), ForeignKey("billetera.id"))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    billetera_origen = Column(GUID(), ForeignKey("billetera.id"))
+    billetera_destino = Column(GUID(), ForeignKey("billetera.id"))
     monto = Column(Numeric(12, 2), nullable=False)
     tipo = Column(String, default="p2p")
+    # pendiente | completada | cancelada | fallida
     estado = Column(String, default="pendiente")
     descripcion = Column(String, nullable=True)
-    referencia_externa = Column(String, nullable=True)
+    referencia_externa = Column(String, nullable=True, unique=True)
     creado_en = Column(DateTime, server_default=func.now())
 
 
 class Escrow(Base):
     __tablename__ = "escrow"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    transaccion_id = Column(UUID(as_uuid=True), ForeignKey("transacciones.id"))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    transaccion_id = Column(GUID(), ForeignKey("transacciones.id"))
     monto_retenido = Column(Numeric(12, 2), nullable=False)
     estado = Column(String, default="retenido")
     expira_en = Column(DateTime)
@@ -60,9 +85,9 @@ class Escrow(Base):
 
 class Evidencia(Base):
     __tablename__ = "evidencias"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"))
-    usuario_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(GUID(), ForeignKey("escrow.id"))
+    usuario_id = Column(GUID(), ForeignKey("usuarios.id"))
     tipo = Column(String)  # "archivo" | "link"
     url = Column(String, nullable=False)
     descripcion = Column(String)
@@ -71,32 +96,32 @@ class Evidencia(Base):
 
 class Envio(Base):
     __tablename__ = "envios"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"), unique=True)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(GUID(), ForeignKey("escrow.id"), unique=True)
     empresa = Column(String, nullable=False)
     numero_guia = Column(String, nullable=False)
     descripcion_producto = Column(String, nullable=True)
     # preparando | en_camino | entregado | confirmado
     estado = Column(String, default="preparando")
-    creado_en = Column(DateTime, default=datetime.utcnow)
-    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    creado_en = Column(DateTime, default=utcnow)
+    actualizado_en = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class Mensaje(Base):
     __tablename__ = "mensajes"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"))
-    remitente_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(GUID(), ForeignKey("escrow.id"))
+    remitente_id = Column(GUID(), ForeignKey("usuarios.id"))
     contenido = Column(String, nullable=False)
-    creado_en = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime, default=utcnow)
 
 
 class Calificacion(Base):
     __tablename__ = "calificaciones"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    escrow_id = Column(UUID(as_uuid=True), ForeignKey("escrow.id"))
-    calificador_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
-    calificado_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    escrow_id = Column(GUID(), ForeignKey("escrow.id"))
+    calificador_id = Column(GUID(), ForeignKey("usuarios.id"))
+    calificado_id = Column(GUID(), ForeignKey("usuarios.id"))
     puntuacion = Column(Integer, nullable=False)
     comentario = Column(String, nullable=True)
     creado_en = Column(DateTime, server_default=func.now())

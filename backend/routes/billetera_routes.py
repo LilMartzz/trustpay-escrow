@@ -137,9 +137,11 @@ def historial(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)
         otra_billetera_id = t.billetera_destino if es_salida else t.billetera_origen
         otra_billetera = db.query(Billetera).filter(Billetera.id == otra_billetera_id).first()
         contraparte = None
+        contraparte_email = None
         if otra_billetera:
             otro_usuario = db.query(Usuario).filter(Usuario.id == otra_billetera.usuario_id).first()
             contraparte = otro_usuario.nombre if otro_usuario else None
+            contraparte_email = otro_usuario.email if otro_usuario else None
 
         resultado.append({
             "id": str(t.id),
@@ -148,6 +150,7 @@ def historial(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)
             "estado": t.estado,
             "es_salida": es_salida,
             "contraparte": contraparte,
+            "contraparte_email": contraparte_email,
             "descripcion": t.descripcion,
             "fecha": str(t.creado_en),
         })

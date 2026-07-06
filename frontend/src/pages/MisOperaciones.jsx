@@ -187,7 +187,18 @@ export default function MisOperaciones() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
                       <span style={{ fontSize: '13.5px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {isComprador ? `Compra a ${op.contraparte}` : `Venta a ${op.contraparte}`}
+                        {isComprador ? 'Compra a ' : 'Venta a '}
+                        <span
+                          onClick={e => {
+                            if (!op.contraparte_email) return
+                            e.stopPropagation()
+                            navigate(`/usuario/${encodeURIComponent(op.contraparte_email)}`)
+                          }}
+                          style={{ color: 'var(--green)' }}
+                          title="Ver perfil y calificaciones"
+                        >
+                          {op.contraparte}
+                        </span>
                       </span>
                       <span className="badge" style={{
                         background: isComprador ? 'var(--green-bg)' : 'var(--amber-bg)',

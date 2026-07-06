@@ -313,7 +313,14 @@ export default function Operacion() {
             </div>
             {escrow?.contraparte && (
               <p style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '2px' }}>
-                {esComprador ? 'Vendedor' : 'Comprador'}: {escrow.contraparte}
+                {esComprador ? 'Vendedor' : 'Comprador'}:{' '}
+                <span
+                  onClick={() => escrow.contraparte_email && navigate(`/usuario/${encodeURIComponent(escrow.contraparte_email)}`)}
+                  style={{ color: 'var(--green)', cursor: escrow.contraparte_email ? 'pointer' : 'default', fontWeight: 500 }}
+                  title="Ver perfil y calificaciones"
+                >
+                  {escrow.contraparte}
+                </span>
               </p>
             )}
           </div>

@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Usuario
+from models import Usuario, Calificacion, Billetera, Transaccion, Escrow
 from dependencies import get_usuario_actual
 from rekognition_client import comparar_rostros
 from almacenamiento import guardar_documento_privado, leer_documento_privado
@@ -90,6 +90,69 @@ def ver_perfil(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db
         "documentos_subidos": bool(usuario.dni_frontal_url and usuario.selfie_url),
         "creado_en": str(usuario.creado_en),
         **resumen_calificacion(db, usuario.id),
+    }
+
+
+@router.get("/publico/{email}")
+def perfil_publico(
+    email: str,
+    usuario=Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    """Perfil visible para otros usuarios: reputación, distribución de estrellas
+    y cada valoración con su descripción. No expone datos sensibles (DNI, teléfono)."""
+    u = db.query(Usuario).filter(func.lower(Usuario.email) == email.strip().lower()).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    calificaciones = (
+        db.query(Calificacion)
+        .filter(Calificacion.calificado_id == u.id)
+        .order_by(Calificacion.creado_en.desc())
+        .all()
+    )
+
+    distribucion = {n: 0 for n in range(1, 6)}
+    lista = []
+    for c in calificaciones:
+        distribucion[c.puntuacion] = distribucion.get(c.puntuacion, 0) + 1
+        autor = db.query(Usuario).filter(Usuario.id == c.calificador_id).first()
+        lista.append({
+            "puntuacion": c.puntuacion,
+            "comentario": c.comentario,
+            "fecha": str(c.creado_en),
+            "autor": autor.nombre if autor else "Usuario",
+            "autor_iniciales": (autor.nombre[:2].upper() if autor and autor.nombre else "??"),
+        })
+
+    # Operaciones escrow completadas (como comprador o vendedor)
+    operaciones_completadas = 0
+    billetera = db.query(Billetera).filter(Billetera.usuario_id == u.id).first()
+    if billetera:
+        operaciones_completadas = (
+            db.query(func.count(Escrow.id))
+            .join(Transaccion, Escrow.transaccion_id == Transaccion.id)
+            .filter(
+                Escrow.estado == "liberado",
+                or_(
+                    Transaccion.billetera_origen == billetera.id,
+                    Transaccion.billetera_destino == billetera.id,
+                ),
+            )
+            .scalar()
+        ) or 0
+
+    resumen = resumen_calificacion(db, u.id)
+    return {
+        "nombre": u.nombre,
+        "email": u.email,
+        "verificado": u.verificado,
+        "miembro_desde": str(u.creado_en),
+        "promedio": resumen["calificacion_promedio"],
+        "cantidad": resumen["calificacion_cantidad"],
+        "distribucion": distribucion,
+        "operaciones_completadas": operaciones_completadas,
+        "calificaciones": lista,
     }
 
 

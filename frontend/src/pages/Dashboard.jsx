@@ -59,7 +59,7 @@ function getContrapartes(historial) {
   for (const t of historial) {
     if (t.contraparte && !seen.has(t.contraparte)) {
       seen.add(t.contraparte)
-      result.push(t.contraparte)
+      result.push({ nombre: t.contraparte, email: t.contraparte_email })
     }
   }
   return result.slice(0, 8)
@@ -323,11 +323,17 @@ export default function Dashboard() {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
-                {contrapartes.map((nombre, i) => (
-                  <div key={nombre} className="avatar-hover stagger" title={nombre} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px', animationDelay: `${i * 50}ms` }}>
-                    <Avatar name={nombre} size={50} />
+                {contrapartes.map((c, i) => (
+                  <div
+                    key={c.nombre}
+                    className="avatar-hover stagger"
+                    title={`Ver perfil de ${c.nombre}`}
+                    onClick={() => c.email && navigate(`/usuario/${encodeURIComponent(c.email)}`)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px', animationDelay: `${i * 50}ms`, cursor: c.email ? 'pointer' : 'default' }}
+                  >
+                    <Avatar name={c.nombre} size={50} />
                     <span style={{ fontSize: '11px', color: 'var(--text2)', fontWeight: 500, textAlign: 'center', lineHeight: 1.3, maxWidth: '56px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {nombre.split(' ')[0]}
+                      {c.nombre.split(' ')[0]}
                     </span>
                   </div>
                 ))}

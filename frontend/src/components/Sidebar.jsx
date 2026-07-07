@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useTheme } from '../contexts/ThemeContext'
-import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../hooks/useTheme'
+import { useAuth } from '../hooks/useAuth'
 import {
   LayoutDashboard, Package, User, LogOut,
   ChevronLeft, ChevronRight, Sun, Moon, Shield, Menu,

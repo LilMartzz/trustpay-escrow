@@ -1,8 +1,7 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, XCircle, Info } from 'lucide-react'
-
-const ToastContext = createContext(null)
+import { ToastContext } from '../contexts/toast-context'
 
 const ICONOS = {
   success: { Icon: CheckCircle2, color: 'var(--green)' },
@@ -11,12 +10,6 @@ const ICONOS = {
 }
 
 const DURACION = 3500
-
-export function useToast() {
-  const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast debe usarse dentro de <ToastProvider>')
-  return ctx
-}
 
 export default function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])

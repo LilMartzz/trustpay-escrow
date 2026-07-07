@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { BadgeCheck, Search, Loader2, Star } from 'lucide-react'
-import { useTheme } from '../contexts/ThemeContext'
+import { useTheme } from '../hooks/useTheme'
 import api from '../services/api'
 
 /* ── Glass avatar — monochrome, no color, encaja en el cristal ── */
@@ -174,7 +174,10 @@ export default function EscrowNatural({ onSubmit, saldoDisponible }) {
         const res = await api.get(`/perfil/buscar?q=${encodeURIComponent(q)}`)
         setSugerencias(res.data)
         setShowDrop(res.data.length > 0)
-      } catch {}
+      } catch {
+        // Búsqueda no crítica: si falla, se deja la lista de sugerencias vacía
+        // sin molestar al usuario; volverá a intentarse al seguir escribiendo.
+      }
       setSearching(false)
     }, 220)
   }, [])

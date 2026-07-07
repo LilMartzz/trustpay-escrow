@@ -3,8 +3,8 @@ import {
   Shield, Lock, Package, MessageSquare, CreditCard,
   Zap, BadgeCheck, Sun, Moon, ArrowRight, ChevronRight,
 } from 'lucide-react'
-import { useTheme } from '../contexts/ThemeContext'
-import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../hooks/useTheme'
+import { useAuth } from '../hooks/useAuth'
 import useReveal from '../hooks/useInView'
 import useCounter from '../hooks/useCounter'
 

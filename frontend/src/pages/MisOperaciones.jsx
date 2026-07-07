@@ -1,16 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Package, ShoppingBag, ChevronRight, Plus, Inbox } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
-
-const ESTADO_MAP = {
-  retenido:  { color: 'var(--amber)', bg: 'var(--amber-bg)',               label: 'Retenido' },
-  liberado:  { color: 'var(--green)', bg: 'var(--green-bg)',               label: 'Liberado' },
-  cancelado: { color: 'var(--red)',   bg: 'rgba(248,113,113,0.1)',         label: 'Cancelado' },
-  expirado:  { color: 'var(--text3)', bg: 'rgba(82,82,91,0.15)',           label: 'Expirado' },
-}
+import { ESTADO_MAP } from '../components/operacion/estados'
 
 const FILTROS = [
   { key: 'todas',     label: 'Todas' },
@@ -32,9 +26,7 @@ export default function MisOperaciones() {
     return op.estado === filtro
   })
 
-  useEffect(() => { cargar() }, [])
-
-  const cargar = async () => {
+  const cargar = useCallback(async () => {
     try {
       const res = await api.get('/escrow/mis-operaciones')
       setOperaciones(res.data)
@@ -42,7 +34,9 @@ export default function MisOperaciones() {
       navigate('/dashboard')
     }
     setLoading(false)
-  }
+  }, [navigate])
+
+  useEffect(() => { (async () => { await cargar() })() }, [cargar])
 
   return (
     <div className="app-layout">

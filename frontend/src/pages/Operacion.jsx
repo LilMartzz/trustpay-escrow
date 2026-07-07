@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Truck, Package } from 'lucide-react'
 import api from '../services/api'
-import { useToast } from '../components/ToastProvider'
-import EstadoCard, { ESTADO_MAP } from '../components/operacion/EstadoCard'
+import { useToast } from '../contexts/toast-context'
+import EstadoCard from '../components/operacion/EstadoCard'
+import { ESTADO_MAP } from '../components/operacion/estados'
 import TrackingCard from '../components/operacion/TrackingCard'
 import EvidenciasTab from '../components/operacion/EvidenciasTab'
 import EnvioTab from '../components/operacion/EnvioTab'
@@ -60,13 +61,7 @@ export default function Operacion() {
   const toast = useToast()
   const pollRef = useRef(null)
 
-  useEffect(() => {
-    cargarDatos()
-    pollRef.current = setInterval(cargarChat, 3000)
-    return () => clearInterval(pollRef.current)
-  }, [])
-
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     try {
       const [e, ev, en, ch] = await Promise.all([
         api.get(`/escrow/estado/${escrowId}`),
@@ -81,14 +76,23 @@ export default function Operacion() {
     } catch {
       navigate('/operaciones')
     }
-  }
+  }, [escrowId, navigate])
 
-  const cargarChat = async () => {
+  const cargarChat = useCallback(async () => {
     try {
       const res = await api.get(`/chat/${escrowId}`)
       setMensajes(res.data)
-    } catch {}
-  }
+    } catch {
+      // El polling del chat es best-effort: un fallo puntual (red intermitente)
+      // se ignora y se reintenta en el siguiente intervalo.
+    }
+  }, [escrowId])
+
+  useEffect(() => {
+    (async () => { await cargarDatos() })()
+    pollRef.current = setInterval(cargarChat, 3000)
+    return () => clearInterval(pollRef.current)
+  }, [cargarDatos, cargarChat])
 
   const flash = (m, isError = false) => {
     if (isError) toast.error(m); else toast.success(m)

@@ -42,10 +42,11 @@ export default function PerfilPublico() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    setPerfil(null)
+    let cancelado = false
     api.get(`/perfil/publico/${encodeURIComponent(email)}`)
-      .then(res => setPerfil(res.data))
-      .catch(() => setError(true))
+      .then(res => { if (!cancelado) setPerfil(res.data) })
+      .catch(() => { if (!cancelado) setError(true) })
+    return () => { cancelado = true }
   }, [email])
 
   const total = perfil?.cantidad || 0

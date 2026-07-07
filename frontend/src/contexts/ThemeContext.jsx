@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-
-const ThemeCtx = createContext({ theme: 'dark', toggle: () => {} })
+import { useState, useEffect } from 'react'
+import { ThemeCtx } from './theme-context'
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('tp-theme') || 'dark')
@@ -14,5 +13,3 @@ export function ThemeProvider({ children }) {
 
   return <ThemeCtx.Provider value={{ theme, toggle }}>{children}</ThemeCtx.Provider>
 }
-
-export const useTheme = () => useContext(ThemeCtx)

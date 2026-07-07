@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Mail, Phone, Shield, CheckCircle2,
@@ -58,9 +58,7 @@ export default function Perfil() {
   const [validandoDni,  setValidandoDni]  = useState(false)
   const navigate   = useNavigate()
 
-  useEffect(() => { cargar() }, [])
-
-  const cargar = async () => {
+  const cargar = useCallback(async () => {
     try {
       const res = await api.get('/perfil/')
       setPerfil(res.data)
@@ -70,7 +68,9 @@ export default function Perfil() {
     } catch {
       navigate('/dashboard')
     }
-  }
+  }, [navigate])
+
+  useEffect(() => { (async () => { await cargar() })() }, [cargar])
 
   const flash = (m, isError = false) => {
     if (isError) { setError(m); setMsg('') } else { setMsg(m); setError('') }

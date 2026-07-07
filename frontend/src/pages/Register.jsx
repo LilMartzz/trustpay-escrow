@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Shield, Mail, Lock, User, Phone, ArrowRight, Sun, Moon } from 'lucide-react'
-import { useTheme } from '../contexts/ThemeContext'
-import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../hooks/useTheme'
+import { useAuth } from '../hooks/useAuth'
 
 export default function Register() {
   const [form, setForm]   = useState({ nombre: '', email: '', password: '', telefono: '' })

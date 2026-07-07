@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -9,8 +9,7 @@ import {
 } from 'firebase/auth'
 import { auth } from '../firebase'
 import api from '../services/api'
-
-const AuthCtx = createContext(null)
+import { AuthCtx } from './auth-context'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -78,5 +77,3 @@ export function AuthProvider({ children }) {
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }
-
-export const useAuth = () => useContext(AuthCtx)

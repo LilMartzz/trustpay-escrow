@@ -1,17 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import {
-  Wallet, TrendingUp, Lock, ArrowUpRight, ArrowDownRight,
+  Wallet, TrendingUp, ArrowUpRight, ArrowDownRight,
   RefreshCw, Plus, ChevronRight, Copy, Check,
 } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 import EscrowNatural from '../components/EscrowNatural'
 import DepositoModal from '../components/DepositoModal'
-import { useToast } from '../components/ToastProvider'
+import { useToast } from '../contexts/toast-context'
 import useCountUp from '../hooks/useCountUp'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { activarNotificaciones } from '../notifications'
 
 /* ── helpers historial ── */
@@ -72,7 +72,6 @@ export default function Dashboard() {
   const [deposito, setDeposito] = useState('')
   const [copied, setCopied]    = useState(false)
   const [mostrarDeposito, setMostrarDeposito] = useState(false)
-  const [loadingEsc, setLoadingEsc] = useState(false)
   const [saldoPulso, setSaldoPulso] = useState(false)
   const [barraLista, setBarraLista] = useState(false)
   const [hoverBarra, setHoverBarra] = useState(false)
@@ -83,15 +82,7 @@ export default function Dashboard() {
   const toast = useToast()
   const saldoPrevRef = useRef(null)
 
-  useEffect(() => {
-    cargar()
-    const id = setInterval(cargar, 5000)
-    return () => clearInterval(id)
-  }, [])
-  useEffect(() => { cargar() }, [location.key])
-  useEffect(() => { activarNotificaciones() }, [])
-
-  const cargar = async () => {
+  const cargar = useCallback(async () => {
     try {
       const [s, h] = await Promise.all([
         api.get('/billetera/saldo'),
@@ -104,7 +95,15 @@ export default function Dashboard() {
       logout()
       navigate('/login')
     }
-  }
+  }, [logout, navigate])
+
+  useEffect(() => {
+    (async () => { await cargar() })()
+    const id = setInterval(cargar, 5000)
+    return () => clearInterval(id)
+  }, [cargar])
+  useEffect(() => { (async () => { await cargar() })() }, [cargar, location.key])
+  useEffect(() => { activarNotificaciones() }, [])
 
   const abrirDeposito = (e) => {
     e.preventDefault()
@@ -119,7 +118,6 @@ export default function Dashboard() {
   }
 
   const handleEscrow = async ({ monto, email_destino, descripcion }) => {
-    setLoadingEsc(true)
     try {
       const res = await api.post('/escrow/iniciar', { email_destino, monto, descripcion })
       await cargar()
@@ -127,7 +125,6 @@ export default function Dashboard() {
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al iniciar escrow')
     }
-    setLoadingEsc(false)
   }
 
   const copyEmail = () => {

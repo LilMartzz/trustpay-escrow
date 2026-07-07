@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { MailCheck, Sun, Moon } from 'lucide-react'
-import { useTheme } from '../contexts/ThemeContext'
-import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../hooks/useTheme'
+import { useAuth } from '../hooks/useAuth'
 
 export default function VerificarCorreo() {
   const [enviando, setEnviando] = useState(false)

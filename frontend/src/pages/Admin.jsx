@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheck, KeyRound, Users, Lock, Timer, ArrowDownToLine,
-  RefreshCw, LogOut, Check, X, UserCheck, Inbox, Scale, AlertTriangle,
+  RefreshCw, LogOut, Check, X, UserCheck, Inbox, Scale, AlertTriangle, Wrench,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -102,6 +102,8 @@ export default function Admin() {
   const [errorPanel, setErrorPanel] = useState('')
   const [resolviendo, setResolviendo] = useState(null) // usuario_id en curso
   const [avisos, setAvisos] = useState([]) // resultados de aprobar/rechazar
+  const [inicializando, setInicializando] = useState(false)
+  const [avisoLedger, setAvisoLedger] = useState(null) // { ok, texto } tras inicializar
 
   const headers = useCallback((clave) => ({ 'X-Admin-Key': clave }), [])
 
@@ -168,6 +170,35 @@ export default function Admin() {
     setPendientes([])
     setLedger(null)
     setAsientos([])
+    setAvisoLedger(null)
+  }
+
+  const inicializarLedger = async () => {
+    setInicializando(true)
+    setAvisoLedger(null)
+    try {
+      const res = await api.post('/admin/inicializar-ledger', null, { headers: headers(adminKey) })
+      // Refrescar el estado del ledger y los asientos para reflejar la apertura.
+      const [l, a] = await Promise.all([
+        api.get('/admin/verificar-ledger', { headers: headers(adminKey) }),
+        api.get('/admin/asientos', { params: { limit: 30 }, headers: headers(adminKey) }),
+      ])
+      setLedger(l.data)
+      setAsientos(a.data)
+      const n = res.data.conciliadas?.length || 0
+      setAvisoLedger({
+        ok: true,
+        texto: n > 0
+          ? `${n} billetera(s) conciliada(s) con asiento de apertura`
+          : 'No había billeteras pendientes de conciliar',
+      })
+    } catch (err) {
+      setAvisoLedger({
+        ok: false,
+        texto: err.response?.data?.detail || 'No se pudo inicializar el ledger',
+      })
+    }
+    setInicializando(false)
   }
 
   const resolver = async (usuarioId, decision) => {
@@ -359,7 +390,25 @@ export default function Admin() {
             </span>
           )
         )}
+        {ledger && !ledger.consistente && ledger.discrepancias.some(d => !d.nota.includes('descuadre')) && (
+          <button
+            onClick={inicializarLedger}
+            disabled={inicializando}
+            className="btn-secondary"
+            style={{ width: 'auto', padding: '6px 12px', fontSize: '12px', marginLeft: 'auto' }}
+            title="Registra un asiento de apertura por cada billetera con saldo previo al ledger"
+          >
+            <Wrench size={12} style={inicializando ? { animation: 'spin 0.8s linear infinite' } : undefined} />
+            {inicializando ? 'Inicializando…' : 'Inicializar ledger'}
+          </button>
+        )}
       </div>
+
+      {avisoLedger && (
+        <div className={`alert ${avisoLedger.ok ? 'alert-success' : 'alert-error'}`} style={{ fontSize: '12px' }}>
+          {avisoLedger.texto}
+        </div>
+      )}
 
       {ledger && !ledger.consistente && (
         <div className="alert alert-error" style={{ fontSize: '12px' }}>
@@ -367,7 +416,7 @@ export default function Admin() {
           {ledger.discrepancias.length} billetera(s) con discrepancia ·{' '}
           {ledger.movimientos_descuadrados.length} movimiento(s) descuadrado(s).
           {ledger.discrepancias.some(d => d.nota.includes('previo al ledger')) &&
-            ' Nota: los saldos anteriores a la creación del ledger aparecen como discrepancia esperada.'}
+            ' Nota: los saldos anteriores a la creación del ledger pueden conciliarse con “Inicializar ledger”.'}
         </div>
       )}
 

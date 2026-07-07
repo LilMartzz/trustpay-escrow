@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from utils import utcnow, iso_utc
 
 from fastapi import APIRouter, Depends, Query
@@ -7,7 +9,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Usuario, Escrow, Transaccion, Envio, AsientoContable, Billetera
 from dependencies import requiere_admin
-from ledger import verificar_ledger
+from ledger import verificar_ledger, registrar_asientos, CUENTA_APERTURA
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requiere_admin)])
 
@@ -21,6 +23,60 @@ def verificar_ledger_endpoint(db: Session = Depends(get_db)):
     reporte = verificar_ledger(db)
     reporte["generado_en"] = utcnow().isoformat() + "Z"
     return reporte
+
+
+@router.post("/inicializar-ledger")
+def inicializar_ledger(db: Session = Depends(get_db)):
+    """Registra un asiento de apertura por cada billetera con saldo distinto de
+    cero que todavía no tiene ningún asiento (saldo previo a la existencia del
+    ledger). Cada apertura acredita a la billetera contra la cuenta de sistema
+    CUENTA_APERTURA, dejando el ledger consistente.
+
+    Idempotente: una billetera ya conciliada tiene asientos y por eso queda
+    excluida en corridas posteriores; volver a llamarlo no duplica nada."""
+    # Billeteras que ya tienen algún asiento: intactas (idempotencia).
+    con_asientos = {
+        bid
+        for (bid,) in db.query(AsientoContable.billetera_id)
+        .filter(AsientoContable.billetera_id.isnot(None))
+        .distinct()
+        .all()
+    }
+
+    conciliadas = []
+    for billetera in db.query(Billetera).all():
+        saldo = Decimal(billetera.saldo or 0)
+        if saldo == 0 or billetera.id in con_asientos:
+            continue
+        transaccion = Transaccion(
+            billetera_origen=None,
+            billetera_destino=billetera.id,
+            monto=saldo,
+            tipo="apertura",
+            estado="completada",
+            descripcion="Asiento de apertura (saldo previo al ledger)",
+        )
+        db.add(transaccion)
+        db.flush()
+        registrar_asientos(db, transaccion.id, [
+            (billetera.id, saldo),
+            (CUENTA_APERTURA, -saldo),
+        ])
+        conciliadas.append({
+            "billetera_id": str(billetera.id),
+            "usuario_id": str(billetera.usuario_id),
+            "saldo": float(saldo),
+        })
+
+    db.commit()
+
+    verificacion = verificar_ledger(db)
+    verificacion["generado_en"] = utcnow().isoformat() + "Z"
+    return {
+        "mensaje": f"{len(conciliadas)} billetera(s) conciliada(s)",
+        "conciliadas": conciliadas,
+        "verificacion": verificacion,
+    }
 
 
 @router.get("/asientos")

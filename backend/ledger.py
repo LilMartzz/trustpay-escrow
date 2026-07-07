@@ -7,6 +7,7 @@ positivo acredita y negativo debita. Los asientos de un mismo movimiento
 Cuentas del sistema (contrapartida de dinero que entra o sale de la app):
   - "mercadopago": origen de los depósitos acreditados.
   - "retiros": destino de los retiros (payout).
+  - "apertura": contrapartida de los saldos que ya existían antes del ledger.
 """
 import uuid
 from decimal import Decimal
@@ -18,6 +19,7 @@ from models import AsientoContable, Billetera
 
 CUENTA_MERCADOPAGO = "mercadopago"
 CUENTA_RETIROS = "retiros"
+CUENTA_APERTURA = "apertura"
 
 
 def registrar_asientos(db: Session, transaccion_id, asientos):

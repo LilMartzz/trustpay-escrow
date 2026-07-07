@@ -37,6 +37,13 @@ def _verificar(client, monkeypatch):
     return res.json()
 
 
+def _inicializar(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_API_KEY", "clave-test")
+    res = client.post("/admin/inicializar-ledger", headers={"X-Admin-Key": "clave-test"})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
 def test_deposito_genera_asientos_balanceados(client, usuario_actual, crear_usuario, db, monkeypatch):
     usuario = crear_usuario(saldo=0)
     usuario_actual.usuario = usuario
@@ -214,6 +221,64 @@ def test_auto_liberacion_tambien_asienta(client, usuario_actual, crear_usuario, 
     reporte = _verificar(client, monkeypatch)
     assert reporte["consistente"] is True
     assert _saldo(db, vendedor) == 100
+
+
+def test_inicializar_ledger_concilia_billetera_huerfana(client, crear_usuario, db, monkeypatch):
+    """Una billetera con saldo previo al ledger (saldo pero sin asientos) queda
+    conciliada con un asiento de apertura y el ledger vuelve a ser consistente."""
+    usuario = crear_usuario(saldo=500)
+
+    previo = _verificar(client, monkeypatch)
+    assert previo["consistente"] is False
+    assert len(previo["discrepancias"]) == 1
+    assert "sin asientos" in previo["discrepancias"][0]["nota"]
+
+    resultado = _inicializar(client, monkeypatch)
+    assert len(resultado["conciliadas"]) == 1
+    assert resultado["conciliadas"][0]["saldo"] == 500
+    assert resultado["verificacion"]["consistente"] is True
+    assert resultado["verificacion"]["discrepancias"] == []
+
+    billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
+    asientos_billetera = db.query(AsientoContable).filter(AsientoContable.billetera_id == billetera.id).all()
+    assert len(asientos_billetera) == 1
+    assert Decimal(asientos_billetera[0].monto) == 500
+
+    # La contrapartida es la cuenta de sistema de apertura, con signo opuesto.
+    apertura = db.query(AsientoContable).filter(AsientoContable.cuenta_sistema == "apertura").all()
+    assert len(apertura) == 1
+    assert Decimal(apertura[0].monto) == -500
+
+    transaccion = db.query(Transaccion).filter(Transaccion.tipo == "apertura").first()
+    assert transaccion is not None
+    assert transaccion.billetera_destino == billetera.id
+
+
+def test_inicializar_ledger_es_idempotente(client, crear_usuario, db, monkeypatch):
+    """Re-ejecutar la inicialización no crea asientos duplicados: las billeteras
+    ya conciliadas tienen asientos y quedan excluidas."""
+    crear_usuario(saldo=250)
+
+    primero = _inicializar(client, monkeypatch)
+    assert len(primero["conciliadas"]) == 1
+    total_tras_primero = db.query(AsientoContable).count()
+    assert total_tras_primero == 2  # asiento de billetera + apertura
+
+    segundo = _inicializar(client, monkeypatch)
+    assert segundo["conciliadas"] == []
+    assert db.query(AsientoContable).count() == total_tras_primero
+    assert segundo["verificacion"]["consistente"] is True
+
+
+def test_inicializar_ledger_ignora_billeteras_sin_saldo(client, crear_usuario, db, monkeypatch):
+    """Una billetera en cero no necesita apertura (registrar_asientos rechaza
+    montos cero); no debe generar ningún asiento."""
+    crear_usuario(saldo=0)
+
+    resultado = _inicializar(client, monkeypatch)
+    assert resultado["conciliadas"] == []
+    assert db.query(AsientoContable).count() == 0
+    assert resultado["verificacion"]["consistente"] is True
 
 
 def test_admin_lista_asientos(client, usuario_actual, crear_usuario, monkeypatch):

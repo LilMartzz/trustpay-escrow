@@ -6,6 +6,7 @@ from utils import utcnow
 def procesar_escrows_vencidos(SessionLocal):
     from models import Escrow, Transaccion, Billetera
     from notificaciones import enviar_notificacion
+    from ledger import registrar_asientos
 
     db = SessionLocal()
     liberados = []
@@ -58,6 +59,10 @@ def procesar_escrows_vencidos(SessionLocal):
                 transaccion.estado = "completada"
                 escrow.estado = "liberado"
                 escrow.liberado_en = utcnow()
+                registrar_asientos(db, transaccion.id, [
+                    (origen.id, -escrow.monto_retenido),
+                    (destino.id, escrow.monto_retenido),
+                ])
 
                 db.commit()
                 liberados.append((origen.usuario_id, destino.usuario_id, float(escrow.monto_retenido)))

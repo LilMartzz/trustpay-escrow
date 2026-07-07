@@ -7,8 +7,20 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Usuario, Escrow, Transaccion, Envio
 from dependencies import requiere_admin
+from ledger import verificar_ledger
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requiere_admin)])
+
+
+@router.get("/verificar-ledger")
+def verificar_ledger_endpoint(db: Session = Depends(get_db)):
+    """Audita el ledger de doble entrada: los asientos de cada movimiento
+    deben sumar cero y el saldo derivado de cada billetera debe coincidir con
+    billetera.saldo. Cualquier discrepancia indica corrupción de saldos (o
+    saldo previo a la existencia del ledger)."""
+    reporte = verificar_ledger(db)
+    reporte["generado_en"] = utcnow().isoformat() + "Z"
+    return reporte
 
 
 @router.get("/metricas")

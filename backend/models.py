@@ -1,6 +1,6 @@
 import uuid
 from utils import utcnow
-from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, Boolean, Integer
+from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, Boolean, Integer, event
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from sqlalchemy.types import CHAR, TypeDecorator
@@ -71,6 +71,38 @@ class Transaccion(Base):
     descripcion = Column(String, nullable=True)
     referencia_externa = Column(String, nullable=True, unique=True)
     creado_en = Column(DateTime, server_default=func.now())
+
+
+class AsientoContable(Base):
+    """Ledger de doble entrada sobre billetera.saldo. Cada movimiento de dinero
+    genera dos o más asientos que suman cero: lo que sale de una cuenta entra
+    en otra. Las cuentas son billeteras (billetera_id) o cuentas del sistema
+    (cuenta_sistema: dinero que entra desde Mercado Pago o sale por retiros).
+    Los asientos son inmutables — el saldo derivado de sumarlos es la fuente
+    de verdad contra la que se audita el campo mutable billetera.saldo.
+
+    Nota: saldo_retenido no genera asientos porque retener/cancelar un escrow
+    no mueve saldo, solo lo marca; el asiento se registra al liberar fondos."""
+
+    __tablename__ = "asientos_contables"
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    transaccion_id = Column(GUID(), ForeignKey("transacciones.id"), nullable=False, index=True)
+    # Exactamente uno de los dos identifica la cuenta del asiento.
+    billetera_id = Column(GUID(), ForeignKey("billetera.id"), nullable=True, index=True)
+    cuenta_sistema = Column(String, nullable=True)
+    # Con signo: positivo acredita la cuenta, negativo la debita.
+    monto = Column(Numeric(12, 2), nullable=False)
+    creado_en = Column(DateTime, server_default=func.now())
+
+
+@event.listens_for(AsientoContable, "before_update")
+def _asiento_inmutable_update(mapper, connection, target):
+    raise ValueError("Los asientos contables son inmutables: no se pueden modificar")
+
+
+@event.listens_for(AsientoContable, "before_delete")
+def _asiento_inmutable_delete(mapper, connection, target):
+    raise ValueError("Los asientos contables son inmutables: no se pueden eliminar")
 
 
 class Escrow(Base):

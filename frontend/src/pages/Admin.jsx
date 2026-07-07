@@ -18,7 +18,7 @@ const ESTADO_ESCROW = {
 const ESTADO_DEPOSITO = {
   completada: { color: 'var(--green)', label: 'Completadas' },
   pendiente:  { color: 'var(--amber)', label: 'Pendientes' },
-  rechazada:  { color: 'var(--red)',   label: 'Rechazadas' },
+  fallida:    { color: 'var(--red)',   label: 'Fallidas' },
 }
 
 const fmtMonto = (n) => `S/ ${Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

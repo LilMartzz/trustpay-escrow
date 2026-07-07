@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
-import { X, CreditCard, Lock, Check, ShieldCheck } from 'lucide-react'
+import { X, CreditCard, Lock, Check, ShieldCheck, Download } from 'lucide-react'
 import api from '../services/api'
 
 // Detección de marca por prefijo, como respaldo si la búsqueda por BIN de Mercado Pago falla.
@@ -45,6 +45,34 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
   const [pendiente, setPendiente] = useState('')
   const [girada, setGirada] = useState(false)
   const [comprobante, setComprobante] = useState(null)
+  const [descargandoPdf, setDescargandoPdf] = useState(false)
+  const [errorPdf, setErrorPdf] = useState('')
+
+  // El generador (jsPDF + fuente Syne) se carga bajo demanda para no engordar el bundle inicial.
+  const descargarPdf = async () => {
+    setErrorPdf('')
+    setDescargandoPdf(true)
+    try {
+      const { descargarComprobantePDF } = await import('../utils/comprobantePdf')
+      await descargarComprobantePDF({
+        titulo: 'Comprobante de recarga',
+        subtitulo: 'Recarga de saldo en tu billetera TrustPay',
+        filas: [
+          { label: 'N° de operación', valor: String(comprobante.referencia) },
+          { label: 'Fecha y hora', valor: comprobante.fecha.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) },
+          { label: 'Medio de pago', valor: `${comprobante.marca} •••• ${comprobante.ultimos4}` },
+          { label: 'Monto recargado', valor: `S/ ${comprobante.monto.toFixed(2)}` },
+          { label: 'Comisión', valor: 'S/ 0.00' },
+        ],
+        total: { label: 'Nuevo saldo', valor: `S/ ${Number(comprobante.saldo).toFixed(2)}` },
+        nota: 'Procesado de forma segura por Mercado Pago',
+        nombreArchivo: `TrustPay-recarga-${String(comprobante.referencia).replace(/[^\w-]/g, '').slice(0, 24)}.pdf`,
+      })
+    } catch {
+      setErrorPdf('No se pudo generar el PDF. Intenta de nuevo.')
+    }
+    setDescargandoPdf(false)
+  }
 
   const numeroLimpio = numero.replace(/\s/g, '')
   const marca = detectarMarcaPorPrefijo(numeroLimpio)
@@ -210,6 +238,12 @@ export default function DepositoModal({ montoInicial, onClose, onSuccess }) {
                 <div className="detalle-row"><span>Comisión</span><span>S/ 0.00</span></div>
                 <div className="detalle-row total"><span>Nuevo saldo</span><span>S/ {Number(comprobante.saldo).toFixed(2)}</span></div>
               </div>
+
+              <button onClick={descargarPdf} disabled={descargandoPdf} className="btn-secondary" style={{ marginBottom: '8px' }}>
+                {descargandoPdf ? <span className="spinner" /> : <Download size={13} />}
+                {descargandoPdf ? 'Generando PDF...' : 'Descargar comprobante (PDF)'}
+              </button>
+              {errorPdf && <p className="alert alert-error shake" style={{ marginBottom: '10px' }}>{errorPdf}</p>}
 
               <button onClick={() => onSuccess()} className="btn-primary">
                 <Check size={13} /> Listo

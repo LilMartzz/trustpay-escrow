@@ -20,6 +20,7 @@ from routes.envio_routes import router as envio_router  # noqa: E402
 from routes.chat_routes import router as chat_router  # noqa: E402
 from routes.calificacion_routes import router as calificacion_router  # noqa: E402
 from routes.evidencia_routes import router as evidencia_router  # noqa: E402
+from routes.admin_routes import router as admin_router  # noqa: E402
 
 
 @pytest.fixture()
@@ -68,6 +69,7 @@ def app(SessionTest, usuario_actual):
     aplicacion.include_router(chat_router)
     aplicacion.include_router(calificacion_router)
     aplicacion.include_router(evidencia_router)
+    aplicacion.include_router(admin_router)
 
     def _get_db():
         sesion = SessionTest()
@@ -98,13 +100,14 @@ def client(app):
 def crear_usuario(db):
     """Factory: crea usuario + billetera con saldo inicial."""
 
-    def _crear(nombre="Usuario Test", saldo=1000, email_verificado=True):
+    def _crear(nombre="Usuario Test", saldo=1000, email_verificado=True, verificado="no_verificado"):
         sufijo = uuid.uuid4().hex[:8]
         usuario = Usuario(
             firebase_uid=f"uid-{sufijo}",
             nombre=nombre,
             email=f"{sufijo}@test.pe",
             email_verificado=email_verificado,
+            verificado=verificado,
         )
         db.add(usuario)
         db.flush()

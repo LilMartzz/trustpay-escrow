@@ -18,6 +18,7 @@ from dependencies import (
     rate_limiter,
 )
 from mercadopago_client import crear_pago, obtener_orden
+from ledger import registrar_asientos, CUENTA_MERCADOPAGO, CUENTA_RETIROS
 from utils import iso_utc, MONTO_MAXIMO
 
 router = APIRouter(prefix="/billetera", tags=["billetera"])
@@ -39,6 +40,13 @@ class DepositoRequest(BaseModel):
 class TransferenciaRequest(BaseModel):
     email_destino: str
     monto: Decimal = Field(gt=0, le=MONTO_MAXIMO, decimal_places=2)
+
+
+class RetiroRequest(BaseModel):
+    monto: Decimal = Field(gt=0, le=MONTO_MAXIMO, decimal_places=2)
+    banco: str = Field(min_length=3, max_length=40)
+    # Cuenta bancaria o CCI (solo dígitos; el CCI peruano tiene 20).
+    cuenta_destino: str = Field(min_length=10, max_length=20, pattern=r"^\d+$")
 
 
 @router.get("/saldo")
@@ -68,6 +76,10 @@ def _acreditar_deposito(db: Session, transaccion: Transaccion, referencia_mp: st
     fila.estado = "completada"
     if referencia_mp:
         fila.referencia_externa = referencia_mp
+    registrar_asientos(db, fila.id, [
+        (billetera.id, fila.monto),
+        (CUENTA_MERCADOPAGO, -fila.monto),
+    ])
     db.commit()
     return True
 
@@ -254,11 +266,73 @@ def transferir(
         estado="completada",
     )
     db.add(transaccion)
+    db.flush()
+    registrar_asientos(db, transaccion.id, [
+        (billetera_origen.id, -data.monto),
+        (billetera_destino.id, data.monto),
+    ])
     db.commit()
 
     return {
         "mensaje": f"Transferencia de S/ {data.monto:.2f} a {destino.nombre} exitosa",
         "saldo_restante": float(billetera_origen.saldo),
+    }
+
+
+@router.post("/retirar")
+def retirar(
+    data: RetiroRequest,
+    usuario=Depends(requiere_email_verificado),
+    db: Session = Depends(get_db),
+):
+    rate_limiter.verificar(f"retirar:{usuario.id}", 5, 60)
+
+    # KYC antes de sacar dinero de la plataforma: exige identidad verificada,
+    # no solo el correo (estándar antifraude para retiros).
+    if usuario.verificado != "verificado":
+        raise HTTPException(
+            status_code=403,
+            detail="Verifica tu identidad (DNI + selfie) antes de retirar dinero",
+        )
+
+    billetera = get_billetera(db, usuario)
+    billetera = bloquear_billeteras(db, billetera.id)[billetera.id]
+
+    disponible = billetera.saldo - billetera.saldo_retenido
+    if disponible < data.monto:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Saldo insuficiente")
+
+    billetera.saldo -= data.monto
+
+    transaccion = Transaccion(
+        billetera_origen=billetera.id,
+        billetera_destino=None,
+        monto=data.monto,
+        tipo="retiro",
+        estado="completada",
+        descripcion=f"Retiro a {data.banco} ****{data.cuenta_destino[-4:]}",
+    )
+    db.add(transaccion)
+    db.flush()
+
+    # Payout simulado: en sandbox no existe money-out real de Mercado Pago.
+    # Una integración real llamaría aquí a la API de payouts y dejaría la
+    # transacción en "pendiente" hasta la confirmación del banco.
+    transaccion.referencia_externa = f"payout-simulado-{transaccion.id}"
+
+    registrar_asientos(db, transaccion.id, [
+        (billetera.id, -data.monto),
+        (CUENTA_RETIROS, data.monto),
+    ])
+    db.commit()
+
+    return {
+        "mensaje": f"Retiro de S/ {data.monto:.2f} a {data.banco} en camino (simulado en sandbox)",
+        "saldo": float(billetera.saldo),
+        "saldo_disponible": float(billetera.saldo - billetera.saldo_retenido),
+        "referencia": transaccion.referencia_externa,
+        "fecha": datetime.now(timezone.utc).isoformat(),
     }
 
 

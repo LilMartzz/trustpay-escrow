@@ -18,6 +18,7 @@ from dependencies import (
 )
 from tasks import procesar_escrows_vencidos
 from notificaciones import enviar_notificacion
+from ledger import registrar_asientos
 from utils import iso_utc, utcnow, MONTO_MAXIMO
 
 router = APIRouter(prefix="/escrow", tags=["escrow"])
@@ -106,6 +107,10 @@ def _liberar_fondos(db: Session, escrow: Escrow, transaccion: Transaccion):
     transaccion.estado = "completada"
     escrow.estado = "liberado"
     escrow.liberado_en = utcnow()
+    registrar_asientos(db, transaccion.id, [
+        (origen.id, -escrow.monto_retenido),
+        (destino.id, escrow.monto_retenido),
+    ])
     return destino
 
 

@@ -3,12 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import {
   Wallet, TrendingUp, ArrowUpRight, ArrowDownRight,
-  RefreshCw, Plus, ChevronRight, Copy, Check,
+  RefreshCw, Plus, ChevronRight, Copy, Check, ArrowUpFromLine,
 } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
 import EscrowNatural from '../components/EscrowNatural'
 import DepositoModal from '../components/DepositoModal'
+import RetiroModal from '../components/RetiroModal'
 import { useToast } from '../contexts/toast-context'
 import useCountUp from '../hooks/useCountUp'
 import { useAuth } from '../hooks/useAuth'
@@ -72,6 +73,7 @@ export default function Dashboard() {
   const [deposito, setDeposito] = useState('')
   const [copied, setCopied]    = useState(false)
   const [mostrarDeposito, setMostrarDeposito] = useState(false)
+  const [mostrarRetiro, setMostrarRetiro] = useState(false)
   const [saldoPulso, setSaldoPulso] = useState(false)
   const [barraLista, setBarraLista] = useState(false)
   const [hoverBarra, setHoverBarra] = useState(false)
@@ -114,6 +116,12 @@ export default function Dashboard() {
     setMostrarDeposito(false)
     setDeposito('')
     toast.success('¡Depósito exitoso!')
+    await cargar()
+  }
+
+  const handleRetiroExitoso = async () => {
+    setMostrarRetiro(false)
+    toast.success('Retiro en camino')
     await cargar()
   }
 
@@ -266,6 +274,16 @@ export default function Dashboard() {
                   Depositar
                 </button>
               </form>
+              <button
+                type="button"
+                onClick={() => setMostrarRetiro(true)}
+                disabled={saldo === null}
+                className="btn-ghost"
+                style={{ width: '100%', marginTop: '10px', padding: '8px', gap: '6px', color: 'var(--text2)', justifyContent: 'center' }}
+              >
+                <ArrowUpFromLine size={13} />
+                Retirar a mi banco
+              </button>
             </div>
           </div>
 
@@ -440,6 +458,14 @@ export default function Dashboard() {
             montoInicial={deposito}
             onClose={() => setMostrarDeposito(false)}
             onSuccess={handleDepositoExitoso}
+          />
+        )}
+        {mostrarRetiro && (
+          <RetiroModal
+            saldoDisponible={saldoDisponible}
+            verificado={saldo?.verificado}
+            onClose={() => setMostrarRetiro(false)}
+            onSuccess={handleRetiroExitoso}
           />
         )}
       </AnimatePresence>

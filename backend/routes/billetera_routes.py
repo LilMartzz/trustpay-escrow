@@ -57,6 +57,8 @@ def ver_saldo(usuario=Depends(get_usuario_actual), db: Session = Depends(get_db)
         "saldo": float(billetera.saldo),
         "saldo_retenido": float(billetera.saldo_retenido),
         "saldo_disponible": float(billetera.saldo - billetera.saldo_retenido),
+        # Estado de identidad (KYC): el retiro lo exige "verificado".
+        "verificado": usuario.verificado,
     }
 
 

@@ -270,6 +270,36 @@ def test_inicializar_ledger_es_idempotente(client, crear_usuario, db, monkeypatc
     assert segundo["verificacion"]["consistente"] is True
 
 
+def test_inicializar_ledger_concilia_saldo_previo_parcial(client, usuario_actual, crear_usuario, db, monkeypatch):
+    """Billetera que ya tiene asientos (un depósito) pero arrastra un saldo
+    previo al ledger: la apertura concilia solo la diferencia, no todo el saldo."""
+    usuario = crear_usuario(saldo=0)
+    usuario_actual.usuario = usuario
+    _depositar(client, monkeypatch, 100, referencia="MP-PREV")
+
+    # Simula el saldo previo al ledger: la billetera tenía 150 extra de antes.
+    billetera = db.query(Billetera).filter(Billetera.usuario_id == usuario.id).first()
+    billetera.saldo = Decimal("250")  # el ledger deriva 100; 150 son previos
+    db.commit()
+
+    previo = _verificar(client, monkeypatch)
+    assert previo["consistente"] is False
+
+    resultado = _inicializar(client, monkeypatch)
+    assert len(resultado["conciliadas"]) == 1
+    assert resultado["conciliadas"][0]["ajuste"] == 150
+    assert resultado["verificacion"]["consistente"] is True
+
+    # La apertura fue por la diferencia (150), no por el saldo completo (250).
+    apertura = db.query(AsientoContable).filter(AsientoContable.cuenta_sistema == "apertura").all()
+    assert len(apertura) == 1
+    assert Decimal(apertura[0].monto) == -150
+
+    # Re-ejecutar no vuelve a tocarla.
+    segundo = _inicializar(client, monkeypatch)
+    assert segundo["conciliadas"] == []
+
+
 def test_inicializar_ledger_ignora_billeteras_sin_saldo(client, crear_usuario, db, monkeypatch):
     """Una billetera en cero no necesita apertura (registrar_asientos rechaza
     montos cero); no debe generar ningún asiento."""

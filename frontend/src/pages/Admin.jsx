@@ -390,13 +390,13 @@ export default function Admin() {
             </span>
           )
         )}
-        {ledger && !ledger.consistente && ledger.discrepancias.some(d => !d.nota.includes('descuadre')) && (
+        {ledger && ledger.discrepancias.length > 0 && (
           <button
             onClick={inicializarLedger}
             disabled={inicializando}
             className="btn-secondary"
             style={{ width: 'auto', padding: '6px 12px', fontSize: '12px', marginLeft: 'auto' }}
-            title="Registra un asiento de apertura por cada billetera con saldo previo al ledger"
+            title="Concilia el saldo previo al ledger registrando un asiento de apertura por la diferencia de cada billetera"
           >
             <Wrench size={12} style={inicializando ? { animation: 'spin 0.8s linear infinite' } : undefined} />
             {inicializando ? 'Inicializando…' : 'Inicializar ledger'}
@@ -415,8 +415,8 @@ export default function Admin() {
           Suma global de asientos: {fmtMonto(ledger.suma_global_asientos)} (debería ser S/ 0.00) ·{' '}
           {ledger.discrepancias.length} billetera(s) con discrepancia ·{' '}
           {ledger.movimientos_descuadrados.length} movimiento(s) descuadrado(s).
-          {ledger.discrepancias.some(d => d.nota.includes('previo al ledger')) &&
-            ' Nota: los saldos anteriores a la creación del ledger pueden conciliarse con “Inicializar ledger”.'}
+          {ledger.movimientos_descuadrados.length === 0 &&
+            ' Nota: si son saldos anteriores a la creación del ledger, concílialos con “Inicializar ledger”.'}
         </div>
       )}
 

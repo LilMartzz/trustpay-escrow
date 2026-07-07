@@ -27,45 +27,49 @@ def verificar_ledger_endpoint(db: Session = Depends(get_db)):
 
 @router.post("/inicializar-ledger")
 def inicializar_ledger(db: Session = Depends(get_db)):
-    """Registra un asiento de apertura por cada billetera con saldo distinto de
-    cero que todavía no tiene ningún asiento (saldo previo a la existencia del
-    ledger). Cada apertura acredita a la billetera contra la cuenta de sistema
-    CUENTA_APERTURA, dejando el ledger consistente.
+    """Concilia el ledger con los saldos previos a su existencia: por cada
+    billetera cuyo saldo no coincide con el derivado de sus asientos, registra
+    un asiento de apertura por la DIFERENCIA (saldo − derivado) contra la cuenta
+    de sistema CUENTA_APERTURA. Así cubre tanto billeteras sin ningún asiento
+    (todo su saldo es previo) como billeteras que ya operaron pero arrastraban
+    un saldo anterior al ledger (solo la parte no explicada por el ledger).
 
-    Idempotente: una billetera ya conciliada tiene asientos y por eso queda
-    excluida en corridas posteriores; volver a llamarlo no duplica nada."""
-    # Billeteras que ya tienen algún asiento: intactas (idempotencia).
-    con_asientos = {
-        bid
-        for (bid,) in db.query(AsientoContable.billetera_id)
+    Idempotente: tras conciliar, el saldo derivado iguala al saldo real, por lo
+    que la diferencia queda en cero y volver a llamarlo no duplica nada."""
+    # Saldo derivado del ledger por billetera (suma de sus asientos).
+    derivados = dict(
+        db.query(AsientoContable.billetera_id, func.sum(AsientoContable.monto))
         .filter(AsientoContable.billetera_id.isnot(None))
-        .distinct()
+        .group_by(AsientoContable.billetera_id)
         .all()
-    }
+    )
 
     conciliadas = []
     for billetera in db.query(Billetera).all():
         saldo = Decimal(billetera.saldo or 0)
-        if saldo == 0 or billetera.id in con_asientos:
+        derivado = Decimal(derivados.get(billetera.id, 0))
+        diferencia = saldo - derivado
+        if diferencia == 0:
             continue
         transaccion = Transaccion(
-            billetera_origen=None,
-            billetera_destino=billetera.id,
-            monto=saldo,
+            billetera_origen=None if diferencia > 0 else billetera.id,
+            billetera_destino=billetera.id if diferencia > 0 else None,
+            monto=abs(diferencia),
             tipo="apertura",
             estado="completada",
-            descripcion="Asiento de apertura (saldo previo al ledger)",
+            descripcion="Asiento de apertura (conciliación de saldo previo al ledger)",
         )
         db.add(transaccion)
         db.flush()
         registrar_asientos(db, transaccion.id, [
-            (billetera.id, saldo),
-            (CUENTA_APERTURA, -saldo),
+            (billetera.id, diferencia),
+            (CUENTA_APERTURA, -diferencia),
         ])
         conciliadas.append({
             "billetera_id": str(billetera.id),
             "usuario_id": str(billetera.usuario_id),
             "saldo": float(saldo),
+            "ajuste": float(diferencia),
         })
 
     db.commit()

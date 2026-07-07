@@ -1,11 +1,11 @@
-from utils import utcnow
+from utils import utcnow, iso_utc
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Usuario, Escrow, Transaccion, Envio
+from models import Usuario, Escrow, Transaccion, Envio, AsientoContable, Billetera
 from dependencies import requiere_admin
 from ledger import verificar_ledger
 
@@ -21,6 +21,52 @@ def verificar_ledger_endpoint(db: Session = Depends(get_db)):
     reporte = verificar_ledger(db)
     reporte["generado_en"] = utcnow().isoformat() + "Z"
     return reporte
+
+
+@router.get("/asientos")
+def listar_asientos(
+    limit: int = Query(30, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Asientos contables más recientes, con la cuenta resuelta a un nombre
+    legible (email del dueño de la billetera o cuenta del sistema)."""
+    filas = (
+        db.query(AsientoContable, Transaccion.tipo)
+        .join(Transaccion, Transaccion.id == AsientoContable.transaccion_id)
+        .order_by(AsientoContable.creado_en.desc(), AsientoContable.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+    # Dueños de billetera en un solo query.
+    billetera_ids = {a.billetera_id for a, _ in filas if a.billetera_id}
+    duenos = {}
+    if billetera_ids:
+        for b, u in (
+            db.query(Billetera, Usuario)
+            .join(Usuario, Usuario.id == Billetera.usuario_id)
+            .filter(Billetera.id.in_(billetera_ids))
+            .all()
+        ):
+            duenos[str(b.id)] = u.email
+
+    return [
+        {
+            "id": str(a.id),
+            "transaccion_id": str(a.transaccion_id),
+            "tipo": tipo,
+            "cuenta": (
+                duenos.get(str(a.billetera_id), "billetera desconocida")
+                if a.billetera_id
+                else f"sistema:{a.cuenta_sistema}"
+            ),
+            "monto": float(a.monto),
+            "fecha": iso_utc(a.creado_en),
+        }
+        for a, tipo in filas
+    ]
 
 
 @router.get("/metricas")

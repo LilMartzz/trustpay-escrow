@@ -214,3 +214,21 @@ def test_auto_liberacion_tambien_asienta(client, usuario_actual, crear_usuario, 
     reporte = _verificar(client, monkeypatch)
     assert reporte["consistente"] is True
     assert _saldo(db, vendedor) == 100
+
+
+def test_admin_lista_asientos(client, usuario_actual, crear_usuario, monkeypatch):
+    usuario = crear_usuario(saldo=0)
+    usuario_actual.usuario = usuario
+    _depositar(client, monkeypatch, 120, referencia="MP-LISTA")
+
+    monkeypatch.setenv("ADMIN_API_KEY", "clave-test")
+    res = client.get("/admin/asientos", headers={"X-Admin-Key": "clave-test"})
+    assert res.status_code == 200
+    asientos = res.json()
+    assert len(asientos) == 2  # doble entrada: billetera + cuenta sistema
+
+    cuentas = {a["cuenta"] for a in asientos}
+    assert usuario.email in cuentas
+    assert "sistema:mercadopago" in cuentas
+    assert sum(a["monto"] for a in asientos) == 0
+    assert all(a["tipo"] == "deposito_mercadopago" for a in asientos)

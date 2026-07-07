@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheck, KeyRound, Users, Lock, Timer, ArrowDownToLine,
-  RefreshCw, LogOut, Check, X, UserCheck, Inbox,
+  RefreshCw, LogOut, Check, X, UserCheck, Inbox, Scale, AlertTriangle,
 } from 'lucide-react'
 import api from '../services/api'
 
@@ -22,6 +22,13 @@ const ESTADO_DEPOSITO = {
 }
 
 const fmtMonto = (n) => `S/ ${Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+const TIPO_MOVIMIENTO = {
+  deposito_mercadopago: 'Depósito',
+  p2p: 'Transferencia',
+  escrow: 'Escrow',
+  retiro: 'Retiro',
+}
 
 /* ── Card de métrica ── */
 function StatCard({ icon: Icon, color, bg, titulo, valor, detalle, delay = 0 }) {
@@ -89,6 +96,8 @@ export default function Admin() {
 
   const [metricas, setMetricas] = useState(null)
   const [pendientes, setPendientes] = useState([])
+  const [ledger, setLedger] = useState(null)
+  const [asientos, setAsientos] = useState([])
   const [cargando, setCargando] = useState(false)
   const [errorPanel, setErrorPanel] = useState('')
   const [resolviendo, setResolviendo] = useState(null) // usuario_id en curso
@@ -100,12 +109,16 @@ export default function Admin() {
     setCargando(true)
     setErrorPanel('')
     try {
-      const [m, p] = await Promise.all([
+      const [m, p, l, a] = await Promise.all([
         api.get('/admin/metricas', { headers: headers(clave) }),
         api.get('/perfil/admin/verificaciones-pendientes', { headers: headers(clave) }),
+        api.get('/admin/verificar-ledger', { headers: headers(clave) }),
+        api.get('/admin/asientos', { params: { limit: 30 }, headers: headers(clave) }),
       ])
       setMetricas(m.data)
       setPendientes(p.data)
+      setLedger(l.data)
+      setAsientos(a.data)
       setAutenticado(true)
       return true
     } catch (err) {
@@ -153,6 +166,8 @@ export default function Admin() {
     setAutenticado(false)
     setMetricas(null)
     setPendientes([])
+    setLedger(null)
+    setAsientos([])
   }
 
   const resolver = async (usuarioId, decision) => {
@@ -326,6 +341,87 @@ export default function Admin() {
           />
         </div>
       )}
+
+      {/* ── Ledger contable ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '13px' }}>
+        <Scale size={16} color="var(--green)" />
+        <h2 style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.02em' }}>
+          Ledger contable
+        </h2>
+        {ledger && (
+          ledger.consistente ? (
+            <span className="badge" style={{ background: 'var(--green-bg)', color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={11} /> Consistente
+            </span>
+          ) : (
+            <span className="badge" style={{ background: 'rgba(248,113,113,0.1)', color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <AlertTriangle size={11} /> Descuadre detectado
+            </span>
+          )
+        )}
+      </div>
+
+      {ledger && !ledger.consistente && (
+        <div className="alert alert-error" style={{ fontSize: '12px' }}>
+          Suma global de asientos: {fmtMonto(ledger.suma_global_asientos)} (debería ser S/ 0.00) ·{' '}
+          {ledger.discrepancias.length} billetera(s) con discrepancia ·{' '}
+          {ledger.movimientos_descuadrados.length} movimiento(s) descuadrado(s).
+          {ledger.discrepancias.some(d => d.nota.includes('previo al ledger')) &&
+            ' Nota: los saldos anteriores a la creación del ledger aparecen como discrepancia esperada.'}
+        </div>
+      )}
+
+      <div className="card" style={{ marginBottom: '26px', padding: 0, overflow: 'hidden' }}>
+        {asientos.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 24px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Sin asientos aún</p>
+            <p style={{ fontSize: '12px', color: 'var(--text3)' }}>
+              Cada depósito, transferencia, liberación de escrow o retiro genera aquí su doble entrada
+            </p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            {/* Cabecera */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '130px 1fr 110px 110px', gap: '10px',
+              padding: '11px 18px', borderBottom: '1px solid var(--border)', minWidth: '520px',
+            }}>
+              {['Fecha', 'Cuenta', 'Movimiento', 'Monto'].map(h => (
+                <span key={h} style={{ fontSize: '10.5px', color: 'var(--text3)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: h === 'Monto' ? 'right' : 'left' }}>
+                  {h}
+                </span>
+              ))}
+            </div>
+            {asientos.map((a, i) => (
+              <div
+                key={a.id}
+                style={{
+                  display: 'grid', gridTemplateColumns: '130px 1fr 110px 110px', gap: '10px',
+                  padding: '10px 18px', alignItems: 'center', minWidth: '520px',
+                  borderBottom: i < asientos.length - 1 ? '1px solid var(--border)' : 'none',
+                }}
+              >
+                <span style={{ fontSize: '11.5px', color: 'var(--text3)' }}>
+                  {new Date(a.fecha).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span style={{ fontSize: '12px', color: a.cuenta.startsWith('sistema:') ? 'var(--text3)' : 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: a.cuenta.startsWith('sistema:') ? 'italic' : 'normal' }}>
+                  {a.cuenta.startsWith('sistema:') ? `Cuenta ${a.cuenta.slice(8)} (sistema)` : a.cuenta}
+                </span>
+                <span className="badge" style={{ background: 'var(--surface2)', color: 'var(--text2)', fontSize: '9.5px', width: 'fit-content' }}>
+                  {TIPO_MOVIMIENTO[a.tipo] || a.tipo}
+                </span>
+                <span style={{
+                  fontSize: '12.5px', fontWeight: 700, fontFamily: 'Syne', textAlign: 'right',
+                  fontVariantNumeric: 'tabular-nums',
+                  color: a.monto >= 0 ? 'var(--green)' : 'var(--red)',
+                }}>
+                  {a.monto >= 0 ? '+' : '−'}{fmtMonto(Math.abs(a.monto))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── Verificaciones pendientes ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '13px' }}>

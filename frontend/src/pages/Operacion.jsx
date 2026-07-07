@@ -5,6 +5,7 @@ import api from '../services/api'
 import { useToast } from '../contexts/toast-context'
 import EstadoCard from '../components/operacion/EstadoCard'
 import { ESTADO_MAP } from '../components/operacion/estados'
+import usePollingAdaptativo from '../hooks/usePollingAdaptativo'
 import TrackingCard from '../components/operacion/TrackingCard'
 import EvidenciasTab from '../components/operacion/EvidenciasTab'
 import EnvioTab from '../components/operacion/EnvioTab'
@@ -59,7 +60,9 @@ export default function Operacion() {
   const [loading, setLoading] = useState(false)
 
   const toast = useToast()
-  const pollRef = useRef(null)
+  // Espejo de los mensajes para detectar novedades en el polling sin recrear
+  // la tarea en cada render (el backoff se reinicia cuando llega un mensaje).
+  const mensajesRef = useRef([])
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -72,6 +75,7 @@ export default function Operacion() {
       setEscrow(e.data)
       setEvidencias(ev.data)
       setEnvio(en.data)
+      mensajesRef.current = ch.data
       setMensajes(ch.data)
     } catch {
       navigate('/operaciones')
@@ -81,18 +85,23 @@ export default function Operacion() {
   const cargarChat = useCallback(async () => {
     try {
       const res = await api.get(`/chat/${escrowId}`)
+      const huboCambio = res.data.length !== mensajesRef.current.length
+      mensajesRef.current = res.data
       setMensajes(res.data)
+      return huboCambio
     } catch {
       // El polling del chat es best-effort: un fallo puntual (red intermitente)
       // se ignora y se reintenta en el siguiente intervalo.
+      return false
     }
   }, [escrowId])
 
   useEffect(() => {
     (async () => { await cargarDatos() })()
-    pollRef.current = setInterval(cargarChat, 3000)
-    return () => clearInterval(pollRef.current)
-  }, [cargarDatos, cargarChat])
+  }, [cargarDatos])
+
+  // El chat se sondea con backoff y se pausa si la pestaña está oculta.
+  usePollingAdaptativo(cargarChat, { base: 3000, max: 10000 })
 
   const flash = (m, isError = false) => {
     if (isError) toast.error(m); else toast.success(m)

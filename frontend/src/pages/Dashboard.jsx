@@ -12,6 +12,7 @@ import DepositoModal from '../components/DepositoModal'
 import RetiroModal from '../components/RetiroModal'
 import { useToast } from '../contexts/toast-context'
 import useCountUp from '../hooks/useCountUp'
+import usePollingAdaptativo from '../hooks/usePollingAdaptativo'
 import { useAuth } from '../hooks/useAuth'
 import { activarNotificaciones } from '../notifications'
 
@@ -83,6 +84,9 @@ export default function Dashboard() {
   const { logout } = useAuth()
   const toast = useToast()
   const saldoPrevRef = useRef(null)
+  // Firma del último estado cargado, para que el polling detecte si algo
+  // cambió (saldo o historial) y ajuste el backoff en consecuencia.
+  const firmaRef = useRef(null)
 
   const cargar = useCallback(async () => {
     try {
@@ -93,19 +97,23 @@ export default function Dashboard() {
       setSaldo(s.data)
       setUsuario(s.data.usuario)
       setHistorial(h.data)
+      const firma = `${s.data.saldo}|${s.data.saldo_retenido}|${h.data.length}`
+      const huboCambio = firma !== firmaRef.current
+      firmaRef.current = firma
+      return huboCambio
     } catch {
       logout()
       navigate('/login')
+      return false
     }
   }, [logout, navigate])
 
-  useEffect(() => {
-    (async () => { await cargar() })()
-    const id = setInterval(cargar, 5000)
-    return () => clearInterval(id)
-  }, [cargar])
+  // Carga inicial y al volver a navegar al dashboard (location.key cambia).
   useEffect(() => { (async () => { await cargar() })() }, [cargar, location.key])
   useEffect(() => { activarNotificaciones() }, [])
+
+  // Saldo e historial con backoff; se pausa si la pestaña está oculta.
+  usePollingAdaptativo(cargar, { base: 5000, max: 20000 })
 
   const abrirDeposito = (e) => {
     e.preventDefault()

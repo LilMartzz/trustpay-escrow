@@ -46,6 +46,7 @@ class Usuario(Base):
     selfie_url = Column(String, nullable=True)
     dni_numero = Column(String(8), nullable=True)
     dni_nombre_reniec = Column(String, nullable=True)
+    similitud_facial = Column(Numeric(5, 2), nullable=True)
     fcm_token = Column(String, nullable=True)
 
 

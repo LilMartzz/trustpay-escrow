@@ -306,6 +306,7 @@ def verificar_identidad(
     usuario.dni_frontal_url = dni_frontal_ref
     usuario.dni_reverso_url = dni_reverso_ref
     usuario.selfie_url = selfie_ref
+    usuario.similitud_facial = similitud
     usuario.verificado = "verificado" if (coincide_rostro and nombre_ok) else "pendiente"
     db.commit()
 
@@ -360,6 +361,7 @@ def listar_verificaciones_pendientes(db: Session = Depends(get_db)):
             "dni_numero": u.dni_numero,
             "nombre_reniec": u.dni_nombre_reniec,
             "documentos_subidos": bool(u.dni_frontal_url and u.selfie_url),
+            "similitud_facial": float(u.similitud_facial) if u.similitud_facial is not None else None,
         }
         for u in pendientes
     ]

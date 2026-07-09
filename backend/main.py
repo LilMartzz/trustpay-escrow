@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 _MIGRACIONES = [
     "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS dni_nombre_reniec VARCHAR",
+    "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS similitud_facial NUMERIC(5,2)",
     # Idempotencia de depósitos: una orden de Mercado Pago no puede acreditarse dos veces.
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_transacciones_ref_externa "
     "ON transacciones (referencia_externa) WHERE referencia_externa IS NOT NULL",

@@ -541,6 +541,16 @@ export default function Admin() {
                     {p.nombre_reniec && <> · RENIEC: {p.nombre_reniec}</>}
                     {!p.documentos_subidos && <> · <span style={{ color: 'var(--amber)' }}>sin documentos completos</span></>}
                   </div>
+                  <div style={{ fontSize: '11px', marginTop: '3px' }}>
+                    {p.similitud_facial != null ? (
+                      // 80% es el umbral de auto-aprobación en Rekognition (rekognition_client.py).
+                      <span style={{ color: p.similitud_facial >= 80 ? 'var(--green)' : 'var(--red)' }}>
+                        Similitud facial: {p.similitud_facial.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--amber)' }}>Similitud facial: no se pudo calcular</span>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>

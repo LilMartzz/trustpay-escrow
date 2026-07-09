@@ -1,41 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Mail, Phone, Shield, CheckCircle2,
-  Clock, Upload, Camera, BadgeCheck, AlertCircle, Star,
+  Clock, Upload, Camera, BadgeCheck, AlertCircle, Star, RotateCcw,
 } from 'lucide-react'
 import api from '../services/api'
 import Sidebar from '../components/Sidebar'
-
-function DocDropzone({ label, file, onPick, Icon }) {
-  const inputRef = useRef()
-  return (
-    <div>
-      <div className="label" style={{ marginBottom: '8px' }}>{label}</div>
-      <div
-        onClick={() => inputRef.current.click()}
-        style={{
-          background: file ? 'var(--green-bg)' : 'var(--surface2)',
-          border: `1px dashed ${file ? 'var(--green)' : 'var(--border2)'}`,
-          borderRadius: 'var(--radius)',
-          padding: '22px 12px',
-          textAlign: 'center',
-          cursor: 'pointer',
-          transition: 'border-color 0.2s, background 0.2s',
-        }}
-      >
-        {file
-          ? <CheckCircle2 size={24} color="var(--green)" style={{ margin: '0 auto 8px' }} />
-          : <Icon size={22} color="var(--text3)" style={{ margin: '0 auto 8px' }} />
-        }
-        <div style={{ fontSize: '11.5px', color: file ? 'var(--green)' : 'var(--text3)' }}>
-          {file ? file.name.substring(0, 20) + (file.name.length > 20 ? '…' : '') : 'Clic para subir'}
-        </div>
-      </div>
-      <input ref={inputRef} type="file" accept="image/*" onChange={e => onPick(e.target.files[0])} style={{ display: 'none' }} />
-    </div>
-  )
-}
+import FileDropzone from '../components/FileDropzone'
+import useUploadProgress from '../hooks/useUploadProgress'
 
 const ESTADO_VERIF = {
   no_verificado: { label: 'No verificado', color: 'var(--red)',   bg: 'rgba(248,113,113,0.1)', icon: AlertCircle },
@@ -56,7 +28,9 @@ export default function Perfil() {
   const [error, setError] = useState('')
   const [loading,       setLoading]       = useState(false)
   const [validandoDni,  setValidandoDni]  = useState(false)
+  const [errorEnvio,    setErrorEnvio]    = useState('')
   const navigate   = useNavigate()
+  const { progress, start, onUploadProgress, finish } = useUploadProgress()
 
   const cargar = useCallback(async () => {
     try {
@@ -107,16 +81,28 @@ export default function Perfil() {
     }
     if (!dniFrontalFile || !dniReversoFile || !selfieFile) { flash('Debes subir las 3 imágenes', true); return }
     setLoading(true)
+    setErrorEnvio('')
+    start()
     try {
       const fd = new FormData()
       fd.append('dni_frontal', dniFrontalFile)
       fd.append('dni_reverso', dniReversoFile)
       fd.append('selfie', selfieFile)
-      const res = await api.post('/perfil/verificar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const res = await api.post('/perfil/verificar', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress,
+      })
       flash(res.data.mensaje)
+      // Los archivos solo se descartan al confirmar el éxito: si falla,
+      // se conservan para reintentar sin tener que volver a seleccionarlos.
       setDniFrontalFile(null); setDniReversoFile(null); setSelfieFile(null)
       cargar()
-    } catch (e) { flash(e.response?.data?.detail || 'Error al enviar documentos', true) }
+    } catch (e) {
+      const detalle = e.response?.data?.detail || 'Error al enviar documentos'
+      setErrorEnvio(detalle)
+      flash(detalle, true)
+    }
+    finish()
     setLoading(false)
   }
 
@@ -318,9 +304,18 @@ export default function Perfil() {
 
                   <form onSubmit={verificar}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }} className="grid-1-mobile">
-                      <DocDropzone label="DNI - Anverso" file={dniFrontalFile} onPick={setDniFrontalFile} Icon={Upload} />
-                      <DocDropzone label="DNI - Reverso" file={dniReversoFile} onPick={setDniReversoFile} Icon={Upload} />
-                      <DocDropzone label="Selfie con DNI" file={selfieFile} onPick={setSelfieFile} Icon={Camera} />
+                      <FileDropzone
+                        label="DNI - Anverso" file={dniFrontalFile} onPick={f => { setDniFrontalFile(f); setErrorEnvio('') }} Icon={Upload}
+                        accept="image/*" disabled={loading} progress={loading ? progress : null} error={errorEnvio}
+                      />
+                      <FileDropzone
+                        label="DNI - Reverso" file={dniReversoFile} onPick={f => { setDniReversoFile(f); setErrorEnvio('') }} Icon={Upload}
+                        accept="image/*" disabled={loading} progress={loading ? progress : null} error={errorEnvio}
+                      />
+                      <FileDropzone
+                        label="Selfie con DNI" file={selfieFile} onPick={f => { setSelfieFile(f); setErrorEnvio('') }} Icon={Camera}
+                        accept="image/*" disabled={loading} progress={loading ? progress : null} error={errorEnvio}
+                      />
                     </div>
 
                     <div className="alert alert-warning" style={{ marginBottom: '14px', fontSize: '11.5px' }}>
@@ -328,7 +323,11 @@ export default function Perfil() {
                     </div>
 
                     <button type="submit" disabled={loading} className="btn-primary">
-                      {loading ? 'Enviando...' : <><Upload size={14} /> Enviar documentos para verificación</>}
+                      {loading
+                        ? `Enviando... ${progress ? `${progress.percent}%` : ''}`
+                        : errorEnvio
+                          ? <><RotateCcw size={14} /> Reintentar envío</>
+                          : <><Upload size={14} /> Enviar documentos para verificación</>}
                     </button>
                   </form>
                 </div>

@@ -6,6 +6,7 @@ import { useToast } from '../contexts/toast-context'
 import EstadoCard from '../components/operacion/EstadoCard'
 import { ESTADO_MAP } from '../components/operacion/estados'
 import usePollingAdaptativo from '../hooks/usePollingAdaptativo'
+import useUploadProgress from '../hooks/useUploadProgress'
 import TrackingCard from '../components/operacion/TrackingCard'
 import EvidenciasTab from '../components/operacion/EvidenciasTab'
 import EnvioTab from '../components/operacion/EnvioTab'
@@ -48,6 +49,9 @@ export default function Operacion() {
   const [descLink, setDescLink]   = useState('')
   const [archivo, setArchivo]     = useState(null)
   const [descArchivo, setDescArchivo] = useState('')
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false)
+  const [errorArchivo, setErrorArchivo] = useState('')
+  const { progress: progresoArchivo, start: iniciarProgreso, onUploadProgress, finish: finalizarProgreso } = useUploadProgress()
 
   const [envioForm, setEnvioForm] = useState({ empresa: 'Serpost', numero_guia: '', descripcion_producto: '' })
   const [chatInput, setChatInput] = useState('')
@@ -172,12 +176,25 @@ export default function Operacion() {
     const fd = new FormData()
     fd.append('archivo', archivo)
     fd.append('descripcion', descArchivo || 'Evidencia del producto')
+    setSubiendoArchivo(true)
+    setErrorArchivo('')
+    iniciarProgreso()
     try {
-      await api.post(`/evidencia/subir-archivo/${escrowId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      await api.post(`/evidencia/subir-archivo/${escrowId}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress,
+      })
+      // El archivo solo se descarta al confirmar el éxito: si falla, se
+      // conserva para reintentar con un solo toque, sin volver a elegirlo.
       setArchivo(null); setDescArchivo('')
       flash('Archivo subido correctamente')
       cargarDatos()
-    } catch { flash('Error al subir archivo', true) }
+    } catch {
+      setErrorArchivo('Error al subir archivo')
+      flash('Error al subir archivo', true)
+    }
+    finalizarProgreso()
+    setSubiendoArchivo(false)
   }
 
   const registrarEnvio = async (e) => {
@@ -346,12 +363,16 @@ export default function Operacion() {
                   setLink={setLink}
                   descLink={descLink}
                   setDescLink={setDescLink}
-                  setArchivo={setArchivo}
+                  archivo={archivo}
+                  setArchivo={(f) => { setArchivo(f); setErrorArchivo('') }}
                   descArchivo={descArchivo}
                   setDescArchivo={setDescArchivo}
                   subirLink={subirLink}
                   subirArchivo={subirArchivo}
                   abrirArchivo={abrirArchivo}
+                  subiendoArchivo={subiendoArchivo}
+                  progresoArchivo={progresoArchivo}
+                  errorArchivo={errorArchivo}
                 />
               )}
 

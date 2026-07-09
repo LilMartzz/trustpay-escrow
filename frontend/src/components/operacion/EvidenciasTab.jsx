@@ -1,10 +1,12 @@
-import { ExternalLink, Paperclip, Link2, Package } from 'lucide-react'
+import { ExternalLink, Paperclip, Link2, Package, RotateCcw } from 'lucide-react'
+import FileDropzone from '../FileDropzone'
 
 export default function EvidenciasTab({
   esComprador, esVendedor, evidencias,
   link, setLink, descLink, setDescLink,
-  setArchivo, descArchivo, setDescArchivo,
+  archivo, setArchivo, descArchivo, setDescArchivo,
   subirLink, subirArchivo, abrirArchivo,
+  subiendoArchivo, progresoArchivo, errorArchivo,
 }) {
   return (
     <>
@@ -36,14 +38,26 @@ export default function EvidenciasTab({
                   <Paperclip size={11} style={{ display: 'inline', marginRight: '4px' }} />
                   Subir archivo
                 </label>
-                <input type="file" accept="image/*,video/*" onChange={e => setArchivo(e.target.files[0])} style={{ padding: '6px 10px' }} />
+                <FileDropzone
+                  file={archivo}
+                  onPick={setArchivo}
+                  accept="image/*,video/*"
+                  Icon={Paperclip}
+                  disabled={subiendoArchivo}
+                  progress={subiendoArchivo ? progresoArchivo : null}
+                  error={errorArchivo}
+                />
               </div>
               <div className="form-group">
                 <label className="label">Descripción</label>
                 <input placeholder="Descripción del archivo" value={descArchivo} onChange={e => setDescArchivo(e.target.value)} />
               </div>
-              <button type="submit" className="btn-secondary" style={{ width: 'auto', padding: '7px 14px', fontSize: '12px' }}>
-                <Paperclip size={12} /> Subir archivo
+              <button type="submit" disabled={subiendoArchivo || !archivo} className="btn-secondary" style={{ width: 'auto', padding: '7px 14px', fontSize: '12px' }}>
+                {subiendoArchivo
+                  ? `Subiendo... ${progresoArchivo ? `${progresoArchivo.percent}%` : ''}`
+                  : errorArchivo
+                    ? <><RotateCcw size={12} /> Reintentar</>
+                    : <><Paperclip size={12} /> Subir archivo</>}
               </button>
             </form>
           </div>

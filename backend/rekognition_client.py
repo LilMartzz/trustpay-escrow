@@ -33,17 +33,22 @@ def comparar_rostros(selfie_bytes: bytes, dni_bytes: bytes):
         return False, None
 
     try:
+        # Umbral 0 para que AWS devuelva la similitud real aunque sea baja;
+        # con SimilarityThreshold=80 las coincidencias menores llegan vacías
+        # y no habría porcentaje que mostrar en la revisión manual.
         resp = client.compare_faces(
             SourceImage={"Bytes": selfie_bytes},
             TargetImage={"Bytes": dni_bytes},
-            SimilarityThreshold=SIMILARITY_THRESHOLD,
+            SimilarityThreshold=0,
         )
-    except (BotoCoreError, ClientError):
+    except (BotoCoreError, ClientError) as e:
+        print(f"[Rekognition] compare_faces falló: {e}")
         return False, None
 
     matches = resp.get("FaceMatches", [])
     if not matches:
+        # No se detectó rostro comparable en alguna de las imágenes.
         return False, None
 
-    similitud = matches[0]["Similarity"]
+    similitud = max(m["Similarity"] for m in matches)
     return similitud >= SIMILARITY_THRESHOLD, similitud
